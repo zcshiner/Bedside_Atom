@@ -421,16 +421,20 @@ void loop() {
 
     #ifndef DISABLE_DISPLAY
     if(useTwentyFourHourTime){
-      matrix.writeDigitNum(0, hour(localTime) / 10, false);
-      matrix.writeDigitNum(1, hour(localTime) % 10, false);
+      matrix.writeDigitNum(0, hour(localTime) / 10);
+      matrix.writeDigitNum(1, hour(localTime) % 10);
     }
     else {
-      matrix.writeDigitNum(0, hourFormat12(localTime) / 10, indicatorPM);
-      matrix.writeDigitNum(1, hourFormat12(localTime) % 10, false);
+      if(hourFormat12(localTime) < 10){ // in 12-hour time first digit is 1 or blank
+        matrix.writeDigitRaw(0, B00000000);
+      } else {
+        matrix.writeDigitNum(0, 1);
+      }
+      matrix.writeDigitNum(1, hourFormat12(localTime) % 10, indicatorAL1);
     }
     // Position 2 is colon dots
-    matrix.writeDigitNum(3, minute(localTime) / 10, indicatorAL1);
-    matrix.writeDigitNum(4, minute(localTime) % 10, indicatorAL2);
+    matrix.writeDigitNum(3, minute(localTime) / 10, indicatorAL2);
+    matrix.writeDigitNum(4, minute(localTime) % 10, indicatorPM);
     matrix.drawColon(indicatorSecondsSeparator);
     matrix.writeDisplay();
     #endif
