@@ -2,6 +2,7 @@
 Everset ES100 WWVB (BPSK) receiver Library V1.1
 Written by François Allard
 Modified by matszwe02
+Modified by Zach Shiner 2024
 
 UNIVERSAL-SOLDER invests time and resources to provide this open source 
 code; please support UNIVERSAL-SOLDER by purchasing products from 
@@ -38,122 +39,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <Wire.h>
 #include "ES100.h"
 
+#define CHANGE_I2C_CLOCK
 #define DEBUG
 //#define DEBUG_I2C
 
 /******************************************************************************
- * Definitions
- ******************************************************************************/
-volatile int 	timerValue = 0;
-
-void interruptReceived()
-{
-	timerValue = millis();
-}
-
-uint8_t ES100::bcdToDec(uint8_t value)
-{
-	return( (value/16*10) + (value%16) );
-}
-
-void ES100::_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
-{
-	int i;
-
-	#ifdef DEBUG_I2C
-		Serial.print("i2c write addr: 0x");
-		Serial.println(addr);
-	#endif
-
-	Wire.setClock(CLOCK_FREQ);
-	
-	Wire.beginTransmission(addr);
-
-	for (i=0; i<numBytes; i++)
-	{
-		Wire.write(ptr[i]);
-
-		#ifdef DEBUG_I2C
-			uint8_t d = ptr[i];
-			Serial.print("i2c Write ptr[");
-			Serial.print(i);
-			Serial.print("] : 0x");
-			Serial.println(d, HEX);
-		#endif
-	}
-	
-	Wire.endTransmission();
-	
-	Wire.setClock(DEFAULT_CLOCK);
-}
-
-void ES100::_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
-{
-	#ifdef DEBUG_I2C
-		Serial.print("i2c read addr: 0x");
-		Serial.println(addr, HEX);
-	#endif
-	
-	int i;
-	const uint8_t stopFlag = 1;
-	
-	Wire.setClock(CLOCK_FREQ);
-	
-	Wire.requestFrom(addr, numBytes, stopFlag);
-
-	for (i=0; (i<numBytes && Wire.available()); i++)
-	{
-		ptr[i] = Wire.read();
-
-		#ifdef DEBUG_I2C
-			Serial.print("i2c read data: 0x");
-			Serial.println(ptr[i], HEX);
-		#endif
-	}
-	
-	Wire.setClock(DEFAULT_CLOCK);
-}
-
-void ES100::_writeRegister(uint8_t addr, uint8_t data)
-{
-	uint8_t		writeArray[2];
-
-	writeArray[0] = addr;
-	writeArray[1] = data;
-
-	#ifdef DEBUG_I2C
-		Serial.print("writeRegister addr : 0x");
-		Serial.println(addr, HEX);
-		Serial.print("writeRegister data : 0x");
-		Serial.println(data, HEX);
-	#endif
-
-	_I2Cwrite(ES100_ADDR, 0x2, writeArray);
-}
-
-uint8_t ES100::_readRegister(uint8_t addr)
-{
-	uint8_t 	data;
-
-	_I2Cwrite(ES100_ADDR, 0x1, &addr);
-	_I2Cread(ES100_ADDR, 0x1, &data);
-
-	#ifdef DEBUG_I2C
-		Serial.print("readRegister addr : 0x");
-		Serial.println(addr, HEX);
-		Serial.print("readRegister data : 0x");
-		Serial.println(data, HEX);
-	#endif
-
-	return(data);
-}
-
-/******************************************************************************
- * Constructors
- ******************************************************************************/
-
-/******************************************************************************
- * User API
+ * Public Methods
  ******************************************************************************/
 void ES100::begin(uint8_t int_pin, uint8_t en_pin)
 {
@@ -170,42 +61,210 @@ void ES100::begin(uint8_t int_pin, uint8_t en_pin)
 	
 }
 
-
-uint8_t ES100::getDeviceID()
+void ES100::enable()
 {
-	#ifdef DEBUG
-		Serial.println(F("ES100::getDeviceID"));
-	#endif
+	// Set the IRQ pin LOW to be able to wait until the ES100 makes it high when ready
+	digitalWrite(_int_pin, LOW);
 	
-	uint8_t devID = _readRegister(ES100_DEVICE_ID_REG); 
-	return devID;
+	#ifdef DEBUG
+		Serial.print(F("ES100::enable..."));
+	#endif
+
+	// Set enable pin HIGH to enable the device
+	digitalWrite(_en_pin, HIGH);
+	
+	// Wait for the ES100 to be ready
+	while (!digitalRead(_int_pin)) {
+		// do nothing
+	}
+	delay(40);
+	#ifdef DEBUG
+		Serial.println(F("done."));
+	#endif
 }
 
-ES100DateTime ES100::getDateTime()
+void ES100::disable()
 {
-	int shiftBy = (timezone + (getDstState() > 1)) * DSTenabled;
 	#ifdef DEBUG
-		Serial.println(F("ES100::getDateTime"));
-		Serial.println("Shifting by " + String(shiftBy));
+		Serial.println(F("ES100::disable"));
+	#endif
+	// Set enable pin LOW to disable device
+	digitalWrite(_en_pin, LOW);
+}
+
+uint8_t ES100::startRx(bool startAntenna, bool singleAntenna)
+{
+  // False to start with Antennna 1, true for Antenna 2
+  uint8_t _dataToWrite;
+
+  // Following code generates 0x01, 0x03, 0x05 or 0x09
+
+  // no if() needed, equivalent to !startAntenna && !singleAntenna
+  _dataToWrite =  0b00001; // bit 0 high
+
+  if (startAntenna && !singleAntenna) {
+    // use anteanna 2
+    _dataToWrite += 0b01000; // bit 3 high
+  }
+
+  if (startAntenna && singleAntenna) {
+    // use antenna 1 ONLY
+    _dataToWrite += 0b00100; // bit 2 high
+  }
+  
+  if (!startAntenna && singleAntenna) {
+    // user antenna 2 ONLY
+    _dataToWrite += 0b00010; // bit 1 high
+  }
+
+  #ifdef DEBUG
+    Serial.print(F("ES100::startRx Tracking off, Anteanna "));
+    if(!startAntenna){
+      Serial.print("1");
+    } else {
+      Serial.print("2");
+    }
+    if(singleAntenna) {
+      Serial.println(" only");
+    }
+    Serial.print("\t Wrote to ES100: ");
+    Serial.println(_dataToWrite, HEX);
+  #endif
+  
+  _writeRegister(ES100_CONTROL0_REG, _dataToWrite);
+  
+  // Check the data we wrote.  Return 0 for success.
+  if (_readRegister(ES100_CONTROL0_REG) == _dataToWrite) {
+    return(EXIT_SUCCESS);
+  } else {
+    return(EXIT_FAILURE);
+  }
+}
+
+uint8_t ES100::startRxTracking(bool startAntenna)
+{
+  #ifdef DEBUG
+    Serial.println(F("ES100::startRx Tracking on, Antenna "));
+    if (!startAntenna) {
+      Serial.println("1 only");
+    } else{
+      Serial.println("2 only");
+    }
+  #endif
+
+  // False to start with Antennna 1, true for Antenna 2
+  uint8_t _dataToWrite;
+  if(!startAntenna) {
+    // Use antenna 1
+    _dataToWrite = 0x15; //B00010101
+  } else  {
+    // Use antenna 2
+    _dataToWrite = 0x13; //B00010011
+  }
+
+  _writeRegister(ES100_CONTROL0_REG, _dataToWrite);
+  
+  // Check the data we wrote.  Return 0 for success.
+  if(_readRegister(ES100_CONTROL0_REG) == _dataToWrite) {
+    return(EXIT_SUCCESS);
+  } else {
+    return(EXIT_FAILURE);
+  }
+}
+
+uint8_t ES100::stopRx()
+{
+	#ifdef DEBUG
+		Serial.println("ES100::stopRx");
 	#endif
 
-	ES100DateTime data;
-	
-	int year    = (int)bcdToDec(_readRegister(ES100_YEAR_REG));
-	int month   = (int)bcdToDec(_readRegister(ES100_MONTH_REG));
-	int day     = (int)bcdToDec(_readRegister(ES100_DAY_REG));
-	int hours   = (int)bcdToDec(_readRegister(ES100_HOUR_REG)) + shiftBy;
-	int minutes = (int)bcdToDec(_readRegister(ES100_MINUTE_REG));
-	int seconds = (int)bcdToDec(_readRegister(ES100_SECOND_REG));
-	
-	shiftTime(&year, &month, &day, &hours, &minutes, &seconds);
+  const uint8_t _dataToWrite = 0x00;
 
-	data.year 	= (uint8_t)year;
-	data.month 	= (uint8_t)month;
-	data.day 	= (uint8_t)day;
-	data.hour 	= (uint8_t)hours;
-	data.minute = (uint8_t)minutes;
-	data.second	= (uint8_t)seconds;
+	_writeRegister(ES100_CONTROL0_REG, _dataToWrite);
+  
+  // Check the data we wrote.  Return 0 for success.
+  if(_readRegister(ES100_CONTROL0_REG) == _dataToWrite) {
+    return(EXIT_SUCCESS);
+  } else {
+    return(EXIT_FAILURE);
+  }
+}
+
+ES100Data ES100::getData()
+{
+  ES100Data data;
+
+  data.Status0 = getStatus0();
+  data.DateTimeUTC = getUTCdateTime();
+
+  return data;
+}
+
+ES100Control0 ES100::getControl0()
+{
+	#ifdef DEBUG
+		Serial.println(F("ES100::getStatus0"));
+	#endif
+
+	ES100Control0 data;
+	uint8_t _registerData = _readRegister(ES100_CONTROL0_REG);
+
+  data.start          = (_registerData & 0b00000001);      // bit 0
+  data.ant1off        = (_registerData & 0b00000010) >> 1; // bit 1
+  data.ant2off        = (_registerData & 0b00000100) >> 2; // bit 2
+  data.startAntenna   = (_registerData & 0b00001000) >> 3; // bit 3
+  data.trackingEnable = (_registerData & 0b00010000) >> 4; // bit 4
+
+	return data;
+}
+
+ES100IRQstatus ES100::getIRQStatus()
+{ 
+	#ifdef DEBUG
+		Serial.println(F("ES100::getIRQStatus"));
+	#endif
+
+  ES100IRQstatus data;
+  uint8_t _registerData = _readRegister(ES100_IRQ_STATUS_REG);
+
+  data.rxComplete     = (_registerData & 0b00000001);      // bit 0
+  data.cycleComplete  = (_registerData & 0b00000100) >> 2; // bit 2
+
+	return data;
+}
+
+ES100Status0 ES100::getStatus0()
+{
+	#ifdef DEBUG
+		Serial.println(F("ES100::getStatus0"));
+	#endif
+
+	ES100Status0 	data;
+	uint8_t _registerData = _readRegister(ES100_STATUS0_REG);
+
+	data.rxOk       = (_registerData & 0b00000001);      // bit 0
+	data.antenna    = (_registerData & 0b00000010) >> 1; // bit 1
+	data.leapSecond	= (_registerData & 0b00011000) >> 3; // bits 3 & 4
+	data.dstState   = (_registerData & 0b01100000) >> 5; // bits 5 & 6
+	data.tracking   = (_registerData & 0b10000000) >> 7; // bit 7
+
+	return data;
+}
+
+ES100DateTime ES100::getUTCdateTime()
+{
+	#ifdef DEBUG
+		Serial.println(F("ES100::getUTCdateTime"));
+  #endif
+
+  ES100DateTime data;
+	
+	data.year   = bcdToDec(_readRegister(ES100_YEAR_REG));
+	data.month  = bcdToDec(_readRegister(ES100_MONTH_REG));
+	data.day    = bcdToDec(_readRegister(ES100_DAY_REG));
+	data.hour   = bcdToDec(_readRegister(ES100_HOUR_REG));
+	data.minute = bcdToDec(_readRegister(ES100_MINUTE_REG));
+	data.second = bcdToDec(_readRegister(ES100_SECOND_REG));
 	
 	return data;
 }
@@ -225,211 +284,170 @@ ES100NextDst ES100::getNextDst()
 	return data;
 }
 
-ES100Status0 ES100::getStatus0()
+uint8_t ES100::getDeviceID()
 {
 	#ifdef DEBUG
-		Serial.println(F("ES100::getStatus0"));
-	#endif
-
-	ES100Status0 	data;
-	uint8_t 		_status = _readRegister(ES100_STATUS0_REG);
-
-	data.rxOk		= (_status & B00000001);
-	data.antenna 	= (_status & B00000010) >> 1;
-	data.leapSecond	= (_status & B00011000) >> 3;
-	data.dstState	= (_status & B01100000) >> 5;
-	data.tracking	= (_status & B10000000) >> 7;
-
-	return data;
-}
-
-uint8_t ES100::getRxOk()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getRxOk"));
-	#endif
-
-	return (_readRegister(ES100_STATUS0_REG) & B00000001);
-}
-
-uint8_t ES100::getAntenna()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getAntenna"));
+		Serial.println(F("ES100::getDeviceID"));
 	#endif
 	
-	return (_readRegister(ES100_STATUS0_REG) & B00000010) >> 1;	
+	return _readRegister(ES100_DEVICE_ID_REG); 
 }
 
-uint8_t ES100::getLeapSecond()
+
+/******************************************************************************
+ * Private Methods
+ ******************************************************************************/
+
+uint8_t ES100::bcdToDec(uint8_t value)
 {
-	#ifdef DEBUG
-		Serial.println(F("ES100::getLeapSecond"));
+	return( (value/16*10) + (value%16) );
+}
+
+void ES100::_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
+{
+	int i;
+
+	#ifdef DEBUG_I2C
+		Serial.print("i2c write addr: 0x");
+		Serial.println(addr, HEX);
 	#endif
+
+  #ifdef CHANGE_I2C_CLOCK
+	  Wire.setClock(CLOCK_FREQ);
+  #endif
 	
-	return (_readRegister(ES100_STATUS0_REG) & B00011000) >> 3;	
-}
+	Wire.beginTransmission(addr);
 
-uint8_t ES100::getDstState()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getDstState"));
-	#endif
-	
-	return (_readRegister(ES100_STATUS0_REG) & B01100000) >> 5;	
-}
+	for (i=0; i<numBytes; i++)
+	{
+		Wire.write(ptr[i]);
 
-uint8_t ES100::getTracking()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getTracking"));
-	#endif
-	
-	return (_readRegister(ES100_STATUS0_REG) & B10000000) >> 7;	
-}
-
-uint8_t	ES100::getIRQStatus()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getIRQStatus"));
-	#endif
-	
-	return _readRegister(ES100_IRQ_STATUS_REG);
-}
-
-ES100Data ES100::getData()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::getData"));
-	#endif
-	
-	ES100Data data;
-
-	data.timerValue = timerValue;
-	data.irqStatus 	= getIRQStatus();
-
-	if (data.irqStatus == 0x01) {
-		data.dateTime 			= getDateTime();
-		data.nextDST 			= getNextDst();
-		data.status 			= getStatus0();
-	} else {
-		data.status.rxOk			= 0x0;
-	}
-
-	return data;
-}
-
-void ES100::enable()
-{
-	// Set the IRQ pin LOW to be able to wait until the ES100 makes it high when ready
-	digitalWrite(_int_pin, LOW);
-	
-	#ifdef DEBUG
-		Serial.print(F("ES100::enable..."));
-	#endif
-
-	// Set enable pin HIGH to enable the device
-	digitalWrite(_en_pin, HIGH);
-	
-	// Wait for the ES100 to be ready
-	while (!digitalRead(_int_pin)) {
-		
-	}
-	delay(40);
-	#ifdef DEBUG
-		Serial.println(F("done."));
-	#endif
-}
-
-void ES100::disable()
-{
-	#ifdef DEBUG
-		Serial.println(F("ES100::disable"));
-	#endif
-	// Set enable pin LOW to disable device
-	digitalWrite(_en_pin, LOW);
-}
-
-void ES100::startRx(uint8_t tracking)
-{
-	if (!tracking) {
-		#ifdef DEBUG
-			Serial.println(F("ES100::startRx Tracking off"));
+		#ifdef DEBUG_I2C
+			uint8_t d = ptr[i];
+			Serial.print("i2c Write ptr[");
+			Serial.print(i);
+			Serial.print("] : 0x");
+			Serial.println(d, HEX);
 		#endif
-		_writeRegister(ES100_CONTROL0_REG, 0x01);
-	} else {
-		#ifdef DEBUG
-			Serial.println(F("ES100::startRx Tracking on"));
-		#endif
-		_writeRegister(ES100_CONTROL0_REG, 0x13);
 	}
+	
+	Wire.endTransmission();
+	#ifdef CHANGE_I2C_CLOCK
+	  Wire.setClock(DEFAULT_CLOCK);
+  #endif
 }
 
-void ES100::stopRx()
+void ES100::_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 {
-	#ifdef DEBUG
-		Serial.println("ES100::stopRx");
+	#ifdef DEBUG_I2C
+		Serial.print("i2c read addr: 0x");
+		Serial.println(addr, HEX);
 	#endif
-	_writeRegister(ES100_CONTROL0_REG, 0x00);
+	
+	int i;
+	const uint8_t stopFlag = 1;
+
+  #ifdef CHANGE_I2C_CLOCK
+	  Wire.setClock(CLOCK_FREQ);
+  #endif
+	
+	Wire.requestFrom(addr, numBytes, stopFlag);
+
+	for (i=0; (i<numBytes && Wire.available()); i++)
+	{
+		ptr[i] = Wire.read();
+
+		#ifdef DEBUG_I2C
+			Serial.print("i2c read data: 0x");
+			Serial.println(ptr[i], HEX);
+		#endif
+	}
+	
+	#ifdef CHANGE_I2C_CLOCK
+	  Wire.setClock(DEFAULT_CLOCK);
+  #endif
 }
 
+void ES100::_writeRegister(uint8_t addr, uint8_t data)
+{
+	uint8_t	writeArray[2];
+
+	writeArray[0] = addr;
+	writeArray[1] = data;
+
+	#ifdef DEBUG_I2C
+		Serial.print("writeRegister addr : 0x");
+		Serial.println(addr, HEX);
+		Serial.print("writeRegister data : 0x");
+		Serial.println(data, HEX);
+	#endif
+
+	_I2Cwrite(ES100_ADDR, 0x2, writeArray);
+}
+
+uint8_t ES100::_readRegister(uint8_t addr)
+{
+	uint8_t data = 0;
+
+	_I2Cwrite(ES100_ADDR, 0x1, &addr);
+	_I2Cread(ES100_ADDR, 0x1, &data);
+
+	#ifdef DEBUG_I2C
+		Serial.print("readRegister addr : 0x");
+		Serial.println(addr, HEX);
+		Serial.print("readRegister data : 0x");
+		Serial.println(data, HEX);
+	#endif
+
+	return(data);
+}
 
 void ES100::shiftTime(int *year, int *month, int *day, int *hours, int *minutes, int *seconds)
 {
   
 		int monthDim[] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
       
-      while(*seconds < 0)
-      {
+      while(*seconds < 0) {
         *seconds += 60;
         *minutes -= 1;
       }
-      while(*seconds >= 60)
-      {
+      while(*seconds >= 60) {
         *seconds -= 60;
         *minutes += 1;
       }
       
-      while(*minutes < 0)
-      {
+      while(*minutes < 0) {
         *minutes += 60;
         *hours -= 1;
       }
-      while(*minutes >= 60)
-      {
+      while(*minutes >= 60) {
         *minutes -= 60;
         *hours += 1;
       }
       
-      while(*hours < 0)
-      {
+      while(*hours < 0) {
         *hours += 24;
         *day -= 1;
       }
-      while(*hours >= 24)
-      {
+      while(*hours >= 24) {
         *hours -= 24;
         *day += 1;
       }
       
-      while(*day < 0)
-      {
+      while(*day < 0) {
         *month -= 1;
         *day += monthDim[*month];
       }
-      while(*day > monthDim[*month])
-      {
+      while(*day > monthDim[*month]) {
         *day -= monthDim[*month];
         *month += 1;
       }
       
-      while(*month > 12)
-      {
+      while(*month > 12) {
         *month -= 12;
         *year += 1;
       }
-      while(*month < 1)
-      {
+      while(*month < 1) {
         *month += 12;
         *year -= 1;
       }

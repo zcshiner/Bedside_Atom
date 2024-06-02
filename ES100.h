@@ -5,12 +5,10 @@ Everset ES100 Library V1.1
 #ifndef ES100_h
 #define ES100_h
 
+const uint32_t CLOCK_FREQ    = 100000;		// Hz
+const uint32_t DEFAULT_CLOCK = 400000;		// Hz
 
-const uint32_t CLOCK_FREQ     = 100000;		// Hz
-const uint32_t  DEFAULT_CLOCK =	400000;		// Hz
-
-const uint8_t ES100_ADDR =					0x32;		// ES100 i2c Address
-//#define ES100_EN_DELAY				100000		// ES100 enable delay
+const uint8_t  ES100_ADDR               =	0x32;		// ES100 i2c Address
 const uint8_t  ES100_CONTROL0_REG       =	0x00;
 const uint8_t  ES100_CONTROL1_REG       = 0x01;
 const uint8_t  ES100_IRQ_STATUS_REG     = 0x02;
@@ -25,6 +23,44 @@ const uint8_t  ES100_NEXT_DST_MONTH_REG =	0x0A;
 const uint8_t  ES100_NEXT_DST_DAY_REG 	= 0x0B;
 const uint8_t  ES100_NEXT_DST_HOUR_REG  = 0x0C;
 const uint8_t  ES100_DEVICE_ID_REG      = 0x0D;
+
+struct ES100Control0
+{
+  bool  start;          // When the START bit is written with a 1, the status, date, and time registers are all cleared, bits
+                        // 4:1 are sampled, and the ES100 begins receiving and processing the input signal.
+  bool  ant1off;        // ES100 stops receiving and processing the input signal. This will automatically occur at the end
+                        // of a successful reception. It can be forced to occur by the host processor writing a 0. (default)
+  bool  ant2off;        // Antenna 1 input disabled.
+                        // Antenna 1 input enabled. (default)
+  bool  startAntenna;   // Antenna 2 input disabled.
+                        // Antenna 2 input enabled. (default)
+  bool  trackingEnable; // Start reception with antenna 2.
+                        // Start reception with antenna 1. (default)
+};
+
+struct ES100IRQstatus
+{
+	bool  rxComplete;
+  bool  cycleComplete;
+};
+
+struct ES100Status0
+{
+	// Data in the struct is only valid when rxOk = 1.
+	bool    rxOk;      	// 0 (0b0)  Indicates that a successful reception has not occured.
+						          // 1 (0b1)  Indicated that a successful reception has occured.
+	bool	  antenna;    // 0 (0b0)  Indicates that the reception occured on Antenna 1.
+						          // 1 (0b1)  Indicates that the reception occured on Antenna 2.
+	uint8_t	leapSecond; // 0 (0b00) Indicates that the current month WILL NOT have a leap second.
+	                    // 2 (0b10) Indicates that the current month WILL have a negative leap second.
+						          // 3 (0b11) Indicates that the current month WILL have a positive leap second.
+	uint8_t	dstState;   // 0 (0b00) Indicates that Daylight Savings Time (DST) is not in effect.
+						          // 1 (0b01) Indicates that DST ends today.
+						          // 2 (0b10) Indicates that DST begins totay.
+						        	// 3 (0b11) Indicates that DST is in effect.
+	bool	  tracking;   // 0 (0b0)  Indicates that the reception attenpt was a 1-minute frame operation.
+							        // 1 (0b1)  Indicates that the reception attemps was a tracking operation.
+};
 
 struct ES100DateTime
 {
@@ -43,55 +79,32 @@ struct ES100NextDst
 	uint8_t		hour;
 };
 
-struct ES100Status0
-{
-	// Data in the struct is only valid when rxOk = 1.
-	uint8_t		rxOk = 0;	// 0 (0x0)  Indicates that a successful reception has not occured.
-							// 1 (0x1)  Indicated that a successful reception has occured.
-	uint8_t		antenna;	// 0 (0x0)  Indicates that the reception occured on Antenna 1.
-							// 1 (0x1)  Indicates that the reception occured on Antenna 2.
-	uint8_t		leapSecond; // 0 (0x00) Indicates that the current month WILL NOT have a leap second.
-	                        // 2 (0x10) Indicates that the current month WILL have a negative leap second.
-							// 3 (0x11) Indicates that the current month WILL have a positive leap second.
-	uint8_t		dstState;	// 0 (0x00) Indicates that Daylight Savings Time (DST) is not in effect.
-							// 1 (0x01) Indicates that DST ends today.
-							// 2 (0x10) Indicates that DST begins totay.
-							// 3 (0x11) Indicates that DST is in effect.
-	uint8_t		tracking;	// 0 (0x0)  Indicates that the reception attenpt was a 1-minute frame operation.
-							// 1 (0x1)  Indicates that the reception attemps was a tracking operation.
-};
-
 struct ES100Data
 {
-	ES100DateTime	dateTime;
-	ES100NextDst 	nextDST;
-	ES100Status0 	status;
-	uint8_t			irqStatus;
-	int 			timerValue;		// This hold the millis() when the interrupt occured, will be useful in the user code to handle the second boundary. New valid data should be handled within 65536 milli seconds, after that the variable will overflow and the user won't be able to calculate the right second boundary.
+  ES100Status0 Status0;
+  ES100DateTime DateTimeUTC;
 };
+
+
+
 
 class ES100
 {
 	public:
-		ES100Data     getData();
-		ES100DateTime	getDateTime();
-		ES100NextDst 	getNextDst();
-		ES100Status0 	getStatus0();
-		void			    begin(uint8_t int_pin, uint8_t en_pin);
-		uint8_t		  	getDeviceID();
-		uint8_t		  	getIRQStatus();
-		void		    	enable();
-		void		    	disable();
-		void	    		startRx(uint8_t = false);
-		void	    		stopRx();
-		uint8_t 	  	getRxOk();
-		uint8_t 	  	getAntenna();
-		uint8_t 	  	getLeapSecond();
-		uint8_t   		getDstState();
-		uint8_t   		getTracking();
-		
-		int timezone   = 0;			    // time shift with a specific timezone. Can be placed any time that int can handle
-		int DSTenabled = false;			// time shift depending on the DST
+    void			      begin(uint8_t int_pin, uint8_t en_pin);
+		void		    	  enable();
+		void		    	  disable();    
+    // False to start with Antennna 1, true for Antenna 2, singleAntenna disables the other antenna
+		uint8_t    		  startRx(bool startAntenna = false, bool singleAntenna = false);
+		uint8_t    		  startRxTracking(bool startAntenna = false);    
+		uint8_t	    	  stopRx();    
+    ES100Data       getData();
+    ES100Control0   getControl0();
+    ES100IRQstatus  getIRQStatus();
+    ES100Status0 	  getStatus0();
+		ES100DateTime   getUTCdateTime();
+		ES100NextDst 	  getNextDst();
+    uint8_t		  	  getDeviceID();
 
 	private:
 		uint8_t			_int_pin;
