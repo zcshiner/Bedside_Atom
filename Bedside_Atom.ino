@@ -1,3 +1,14 @@
+/*!
+ * @file Bedside_Atom.ino
+ * Bedside Atom
+ * A WWVB syncronized tabletop clock
+ *
+ * Written by Zach Shiner, 2024
+ * 
+ * MIT License
+ * See README.md and LICENSE.md for more information
+ */
+
 #include "ES100.h"
 #include <Wire.h>
 #include <TimeLib.h>              // https://github.com/PaulStoffregen/Time
@@ -9,24 +20,31 @@ ES100 es100;
 Adafruit_7segment matrix = Adafruit_7segment();
 Bounce2::Button hourButton = Bounce2::Button();
 Bounce2::Button minuteButton = Bounce2::Button();
-Bounce2::Button timeButton = Bounce2::Button();
+Bounce2::Button TZ0switch = Bounce2::Button();
+Bounce2::Button TZ1switch = Bounce2::Button();
+Bounce2::Button DSTswitch = Bounce2::Button();
 
-#define DEBUG
-#define DEBUG_CLOCK // Debug display related
-//#define DEBUG_CONTINUOUS // Don't stop decoding for debug
-//#define DISABLE_DISPLAY
-const unsigned long baudrate = 115200; 
+// Compile debug/options
+#define DEBUG ///< Print core functionality debug info
+#define DEBUG_CLOCK ///< Print display-related debug info
+//#define DEBUG_CONTINUOUS ///< Don't stop decoding for debug
+//#define DISABLE_DISPLAY ///< Disable I2C display
+#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
 
 // Pin Assignments
-const uint8_t es100_IRQ = 2;
-const uint8_t es100_EN = LED_BUILTIN;
-const uint8_t clockButtonHourPin = 7;
-const uint8_t clockButtonMinutePin = 8;
-const uint8_t clockButtonTimePin = 12;
-const uint8_t clockButtonAlarmPin = 0;
-const uint8_t clockSwitchAlarmOnPin = 0;
-const uint8_t clockSwitchAlarm1Pin = 0;
-const uint8_t clockSwitchAlarm2Pin = 0;
+const uint8_t es100_IRQ = 7;
+const uint8_t es100_EN = 5; // LED_BUILTIN; // 13 on UNO
+const uint8_t clockButtonPin_Hour = 10;
+const uint8_t clockButtonPin_Minute = 9;
+const uint8_t clockSwitchPin_TZ0 = A2;
+const uint8_t clockSwitchPin_TZ1 = A1;
+const uint8_t clockSwitchPin_DST = 11;
+const uint8_t clockSwitchPin_24HR = 12;
+const unsigned long baudrate = 115200; 
+
+// Useful constants
+const uint16_t SECONDS_IN_HOUR = 3600;
+const uint16_t SECONDS_IN_MINUTE = 60;
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -34,6 +52,7 @@ volatile uint8_t interruptCount = 0;
 uint8_t lastInterruptCount = 0;
 time_t lastGoodSyncTime = 0;
 time_t lastSyncAttempt = 0;
+time_t syncWatchdog = 0;
 
 // Timestamps for faux multitasking
 unsigned long secondsIndicatorMillis = 0;
@@ -42,31 +61,32 @@ unsigned long displayTimeMillis = 0;
 unsigned long executionTime = 0;
 unsigned long debugTimeMillis = 0;
 
+// Cycle Times (seconds)
+const time_t watchdogTimeout = (time_t)SECONDS_IN_HOUR * 2;
+const time_t staleTimeout = (time_t)SECONDS_IN_HOUR * 6;
+
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
 bool triggerTimeSync = false;     // variable to trigger the reception
 
 // ES100 Data Structures
-ES100IRQstatus lastReadIRQStatus = {0}; // read every interrupt
-ES100Status0 lastReadStatus0 = {0};     // read every interrupt
-ES100Data validES100Data = {0};         // only gets updated when rx complete & rx okay are both true
+ES100IRQstatus lastReadIRQStatus = {}; // read every interrupt
+ES100Status0 lastReadStatus0 = {};     // read every interrupt
+ES100Data validES100Data = {};         // only gets updated when rx complete & rx okay are both true
 
 // Display status indicators
 bool indicatorSecondsSeparator = true; // start illuminated
 bool indicatorPM = false;
 bool indicatorAL1 = false;
 bool indicatorAL2 = false;
-const bool useTwentyFourHourTime = false; // true to use 24-hour clock
+bool useTwentyFourHourTime = false; // true to use 24-hour clock
 
 // Local time settings
-const int8_t timezone = -5;   // America/New_York
+//const int8_t timezone = -5;   // America/New_York
+
+int8_t timezone = 0;
 int8_t UTCoffset = 0;
 time_t localTime = 0;
-
-// Useful constants
-const uint16_t SECONDS_IN_HOUR = 3600;
-const uint16_t SECONDS_IN_MINUTE = 60;
-
 
 void atomic() {
   // Called procedure when we receive an interrupt from the ES100
@@ -75,12 +95,12 @@ void atomic() {
   atomicMillis = millis();
   interruptCount++;
   #ifdef DEBUG
-    Serial.println("Interrupt Handler Called");
+    Serial.println("** INTERRUPT CALLED ** ");
   #endif
 }
 
 void printES100DateTime(ES100DateTime dt) {
-  Serial.print("received local time = 20");
+  Serial.print("Received UTC time = 20");
   Serial.print(dt.year);
   Serial.print(":");
   Serial.print(dt.month);
@@ -112,83 +132,164 @@ void updateTime(ES100DateTime dt) {
 }
 
 void calculateUTCoffset(){
-  // If DST begins today
-  if (validES100Data.Status0.dstState == 0b10){
-    if (hour() < 2 - timezone){
-      UTCoffset = timezone;
-    } else {
+  #ifdef DEBUG
+    Serial.println("Calculating UTC offset");
+  #endif
+
+  int8_t timeZoneSwitch; // position 0 through 3
+  timeZoneSwitch = TZ0switch.isPressed();
+  timeZoneSwitch += TZ1switch.isPressed() << 1;
+
+  timezone = -5 - timeZoneSwitch;
+  UTCoffset = timezone;
+
+  if (DSTswitch.isPressed()) {
+    // If DST begins today
+    if (validES100Data.Status0.dstState == 0b10){
+      if (hour() < 2 - timezone){
+        UTCoffset = timezone;
+      } else {
+        UTCoffset = timezone + 1;
+      }
+    } else
+
+    // If DST ends today
+    if (validES100Data.Status0.dstState == 0b01){
+      if (hour() < 2 - timezone - 1){
+        UTCoffset = timezone + 1;
+      } else {
+        UTCoffset = timezone;
+      }
+    } else
+
+    // If DST is in effect
+    if (validES100Data.Status0.dstState == 0b11){
       UTCoffset = timezone + 1;
     }
-  } else
-
-  // If DST ends today
-  if (validES100Data.Status0.dstState == 0b01){
-    if (hour() < 2 - timezone - 1){
-      UTCoffset = timezone + 1;
-    } else {
-      UTCoffset = timezone;
-    }
-  } else
-
-  // If DST is in effect
-  if (validES100Data.Status0.dstState == 0b11){
-    UTCoffset = timezone + 1;
-    
-  } else
-  { // aka 0b00: DST is not in effect
-    UTCoffset = timezone;
   }
 }
 
 void setup() {
   Wire.begin();
-  //pinMode(LED_BUILTIN, OUTPUT); // Use onboard LED for seconds
-  
-  #ifdef DEBUG
-    Serial.begin(baudrate);
-    Serial.println("");
-    Serial.println("***  INIT  ***");
+
+  #ifndef DISABLE_DISPLAY
+    // Begin display on i2c address 0x70
+    matrix.begin(0x70);
+    matrix.setBrightness(15); // 0 to 15
+
+    // Turn on all addressable digits
+    for (uint8_t i = 0; i < 5; i++) {
+      matrix.writeDigitRaw(i, 0b11111111);
+    }
+    matrix.writeDisplay(); 
+    delay(3000);
+
+    // Encircle display startup animation
+    const uint8_t animateDelay = 80;
+    for (uint8_t i = 0; i < 6; i++) {
+      matrix.writeDigitRaw(0, 0b00000001);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(1, 0b00000001);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(3, 0b00000001);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(4, 0b00000001);
+      matrix.writeDisplay();
+      delay(animateDelay/2);
+      matrix.clear();
+      matrix.writeDigitRaw(4, 0b00000010);
+      matrix.writeDisplay();
+      delay(animateDelay/2);
+      matrix.clear();
+      matrix.writeDigitRaw(4, 0b00000100);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(4, 0b00001000);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(3, 0b00001000);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(1, 0b00001000);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(0, 0b00001000);
+      matrix.writeDisplay();
+      delay(animateDelay);
+      matrix.clear();
+      matrix.writeDigitRaw(0, 0b00010000);
+      matrix.writeDisplay();
+      delay(animateDelay/2);
+      matrix.clear();
+      matrix.writeDigitRaw(0, 0b00100000);
+      matrix.writeDisplay();
+      delay(animateDelay/2);
+      matrix.clear();
+    }
+    delay(animateDelay * 5);
+    matrix.writeDisplay();
   #endif
-  #ifndef DEBUG
-    #ifdef DEBUG_CLOCK
-      Serial.begin(baudrate);
-      Serial.println("");
-      Serial.println("***  INIT  ***");
-    #endif
+
+  #if defined(DEBUG) || defined(DEBUG_CLOCK)
+    Serial.begin(baudrate);
+
+    while(!Serial && millis() < 5000) {
+      // Wait for serial to connect
+    }
+    Serial.println("\r\n\r\n***  INIT  ***");
   #endif
 
   // Initialize WWVB reciever
   es100.begin(es100_IRQ, es100_EN);
   attachInterrupt(digitalPinToInterrupt(es100_IRQ), atomic, FALLING);
 
-  // Setup button debouncing for hardware buttons
+  // Setup hardware buttons
   const uint8_t debounceInterval = 5;
-  hourButton.attach(clockButtonHourPin, INPUT_PULLUP);
-  minuteButton.attach(clockButtonMinutePin, INPUT_PULLUP);
-  timeButton.attach(clockButtonTimePin, INPUT_PULLUP);
+  hourButton.attach(clockButtonPin_Hour, INPUT_PULLUP);
+  minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
+  TZ0switch.attach(clockSwitchPin_TZ0, INPUT_PULLUP);
+  TZ1switch.attach(clockSwitchPin_TZ1, INPUT_PULLUP);
+  DSTswitch.attach(clockSwitchPin_DST, INPUT_PULLUP);
+
+  pinMode(clockSwitchPin_24HR, INPUT_PULLUP);
+
   hourButton.interval(debounceInterval);
   minuteButton.interval(debounceInterval);
-  timeButton.interval(debounceInterval);
+  TZ0switch.interval(debounceInterval);
+  TZ1switch.interval(debounceInterval);
+  DSTswitch.interval(debounceInterval);
+
   hourButton.setPressedState(LOW);
   minuteButton.setPressedState(LOW);
-  timeButton.setPressedState(LOW);
-
+  TZ0switch.setPressedState(LOW);
+  TZ1switch.setPressedState(LOW);
+  DSTswitch.setPressedState(HIGH);
+  
   #ifdef DEBUG
+    delay(3000);
     es100.enable();
     uint8_t deviceID = es100.getDeviceID();
     Serial.print("Device ID: 0x");
-    Serial.println(deviceID, HEX);
-    Serial.println("finished setup");
+    Serial.print(deviceID, HEX);
+    Serial.print(";\t");
+    if (deviceID == 0x10) {
+      Serial.println("Success: Device ID match");
+    } else {
+      Serial.println("Error: Device ID mismatch");
+    }
+    Serial.println("Finished setup");
   #endif
 
-  #ifndef DISABLE_DISPLAY
-    // Begin display on i2c address 0x70
-    matrix.begin(0x70);
-    matrix.setBrightness(1); // 0 to 15
-    matrix.println("BOOB");
-    matrix.writeDisplay();
-    delay(5000);
-  #endif
 }
 
 void loop() {
@@ -196,21 +297,16 @@ void loop() {
   if (!timeSyncInProgress && triggerTimeSync) {
     es100.enable();
 
-    #ifdef DEBUG
-      Serial.print("Last Received on Antenna ");
-      if(!validES100Data.Status0.antenna){
-        Serial.println("1");
-      } else {
-        Serial.println("2");
-      }
-      Serial.println(es100.startRx(validES100Data.Status0.antenna));
-    #endif
-    #ifndef DEBUG
-      // Use most recently known good antenna.  Use "valid" data
-      es100.startRx(validES100Data.Status0.antenna);
-    #endif
+    while (es100.startRx(false, true) != EXIT_SUCCESS) {
+      #ifdef DEBUG
+        Serial.println("StartRx did not return EXIT_SUCCESS.  Retry in 5s...");
+      #endif
+      delay(5000);
+    }
+    Serial.println("StartRx Antenna 1 only: EXIT_SUCCESS");
     
     lastSyncAttempt = now();
+    syncWatchdog = lastSyncAttempt;
     timeSyncInProgress = true;
     triggerTimeSync = false;
 
@@ -231,7 +327,7 @@ void loop() {
     lastReadStatus0 = es100.getStatus0();
 
     #ifdef DEBUG
-      Serial.print("ES100 Interrupt received... ");
+      Serial.print("Reading IRQ and Status0 registers. Received: ");
     #endif
 
     lastSyncAttempt = now();
@@ -244,7 +340,7 @@ void loop() {
       validES100Data.Status0 = lastReadStatus0;
 
 	    #ifdef DEBUG
-        Serial.println("IRQ: Successful Reception");
+        Serial.println("Successful Reception");
         Serial.print("Atomic millis = ");
         Serial.println(atomicMillis);
 
@@ -288,13 +384,16 @@ void loop() {
       timeSyncInProgress = false;
 
       #ifndef DEBUG_CONTINUOUS
-        #ifdef DEBUG
-          Serial.println("Disabling es100 after good Rx");
-        #endif
-
         // Stop reception after a good decode
-        Serial.print("StopRx exit code: ");
-        Serial.println(es100.stopRx());
+        while (es100.stopRx() != EXIT_SUCCESS) {
+          #ifdef DEBUG
+            Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
+          #endif
+          delay(5000);
+        }
+        #ifdef DEBUG
+          Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
+        #endif
         es100.disable();
       #endif
 
@@ -312,6 +411,7 @@ void loop() {
       #endif
 
       #ifndef DISABLE_DISPLAY
+        matrix.clear();
         matrix.println("SYNC");
         matrix.writeDisplay();
         delay(5000);
@@ -320,18 +420,37 @@ void loop() {
     }
     else if (!lastReadIRQStatus.rxComplete && lastReadIRQStatus.cycleComplete){ // IRQStatus = 0x04
       #ifdef DEBUG
-        Serial.println("IRQ: Unsuccessful Reception");
+        Serial.println("Unsuccessful Reception");
       #endif
     }
     else {
       #ifdef DEBUG
-        Serial.println("IRQ: Bad Data");
+        Serial.println("Bad Data");
       #endif
     }
 
     lastInterruptCount = interruptCount;
   }
 
+  // Very rarely ES100 and MCU get out of sync with each other.  Let's reset the process every two hours of searching.
+  if (timeSyncInProgress && (now() - syncWatchdog) > watchdogTimeout) {
+    
+    while (es100.stopRx() != EXIT_SUCCESS) {
+      #ifdef DEBUG
+        Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
+      #endif
+      delay(5000);
+    }
+    #ifdef DEBUG
+      Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
+    #endif
+    es100.disable();
+    delay(1500);
+
+    triggerTimeSync = true;
+    timeSyncInProgress = false;
+    syncWatchdog = now();
+  }
 
   // Receive the current time on an schedule
   // Also evaluate if DST is changing
@@ -373,7 +492,7 @@ void loop() {
     else {
       // Already recieving the time, do nothing
       #ifdef DEBUG
-        Serial.print("Time sync in progress...");
+        Serial.println("Time sync in progress...");
       #endif
     }
 
@@ -394,11 +513,9 @@ void loop() {
     
     // Blink display separator every second
     indicatorSecondsSeparator = !indicatorSecondsSeparator;
-    // Sync with onboard led for debug
-    // digitalWrite(LED_BUILTIN, indicatorSecondsSeparator);
 
     // If time is unset or expired, twinkle the alarm lights
-    if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > (time_t)SECONDS_IN_HOUR * 6){ //thinking 6 hours sounds right
+    if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeout){
       indicatorAL1 = !indicatorAL1;
       indicatorAL2 = !indicatorAL1;
     } 
@@ -417,25 +534,34 @@ void loop() {
     localTime = now();
     localTime += (time_t)UTCoffset * SECONDS_IN_HOUR;
 
-    indicatorPM = isPM(localTime);
-
     #ifndef DISABLE_DISPLAY
+    useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
+
     if(useTwentyFourHourTime){
       matrix.writeDigitNum(0, hour(localTime) / 10);
       matrix.writeDigitNum(1, hour(localTime) % 10);
+      indicatorPM = false;
     }
     else {
       if(hourFormat12(localTime) < 10){ // in 12-hour time first digit is 1 or blank
-        matrix.writeDigitRaw(0, B00000000);
+        matrix.writeDigitRaw(0, 0b00000000);
       } else {
         matrix.writeDigitNum(0, 1);
       }
-      matrix.writeDigitNum(1, hourFormat12(localTime) % 10, indicatorAL1);
+      matrix.writeDigitNum(1, hourFormat12(localTime) % 10);
+      indicatorPM = isPM(localTime);
     }
-    // Position 2 is colon dots
-    matrix.writeDigitNum(3, minute(localTime) / 10, indicatorAL2);
-    matrix.writeDigitNum(4, minute(localTime) % 10, indicatorPM);
-    matrix.drawColon(indicatorSecondsSeparator);
+
+    matrix.writeDigitNum(3, minute(localTime) / 10);
+    matrix.writeDigitNum(4, minute(localTime) % 10);
+
+    uint8_t rawToWrite;
+    rawToWrite =  0b00000001 * indicatorAL1;
+    rawToWrite += 0b00000010 * indicatorAL2;
+    rawToWrite += 0b00001100 * indicatorSecondsSeparator;
+    rawToWrite += 0b00010000 * indicatorPM;
+    matrix.writeDigitRaw(2, rawToWrite);
+    
     matrix.writeDisplay();
     #endif
 
@@ -470,6 +596,11 @@ void loop() {
         Serial.print(now() - lastGoodSyncTime);
         Serial.print("s\t");
       }
+      if(timeSyncInProgress){
+        Serial.print("Watchdog: ");
+        Serial.print(watchdogTimeout + syncWatchdog - now());
+        Serial.print("\t");
+      }
       Serial.print("UTC Offset: ");
       Serial.print(UTCoffset);
       Serial.print("\tExec Time: ");
@@ -485,21 +616,66 @@ void loop() {
 
   hourButton.update();
   minuteButton.update();
-  timeButton.update();
+  TZ0switch.update();
+  TZ1switch.update();
+  DSTswitch.update();
+  
 
-  // Advance time with button presses
-  if(timeButton.isPressed() && hourButton.pressed()){
+  // Advance hour with button press
+  if(hourButton.pressed()){
     #ifdef DEBUG
       Serial.println("HOUR Pressed\t");
     #endif
+
+    adjustTime(SECONDS_IN_HOUR);
+    lastGoodSyncTime = now(); 
   }
 
-  if(timeButton.isPressed() && minuteButton.pressed()){
-    adjustTime(SECONDS_IN_MINUTE);
+  // Advance minute with button press
+  if(minuteButton.pressed()){
     #ifdef DEBUG
       Serial.println("MINUTE Pressed\t");
-      #endif
+    #endif
+
+    adjustTime(SECONDS_IN_MINUTE);
+    lastGoodSyncTime = now(); 
   }
+
+  // Force a recalculate of UTC offset if time zone switches change
+  if (TZ0switch.changed() || TZ1switch.changed()) {
+    #ifdef DEBUG
+      Serial.println("TZ Switch Changed!");
+    #endif
+
+    if(timeStatus() != timeNotSet){
+      calculateUTCoffset();
+    }
+  }
+
+  // Force a recalculate of UTC offset if DST switch changes
+  if (DSTswitch.changed()) {
+    #ifdef DEBUG
+      Serial.println("DST Switch Changed!");
+    #endif
+
+    if(timeStatus() != timeNotSet){
+      calculateUTCoffset();
+    }
+
+    #ifndef DISABLE_DISPLAY
+      matrix.clear();
+      matrix.println("dSt ");
+      matrix.writeDigitNum(4, DSTswitch.isPressed());
+      matrix.writeDisplay();
+      delay(1000);
+      matrix.clear();
+    #endif
+  }
+
+  #ifdef SYNC_LED
+    // Turn onboard led on and off with the enable status
+    digitalWrite(LED_BUILTIN, digitalRead(es100_EN));
+  #endif
 
   #ifdef DEBUG
     // Keep track of execution time

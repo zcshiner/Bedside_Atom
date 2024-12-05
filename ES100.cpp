@@ -1,36 +1,38 @@
-/*
-Everset ES100 WWVB (BPSK) receiver Library V1.1
-Written by François Allard
-Modified by matszwe02
-Modified by Zach Shiner 2024
-
-UNIVERSAL-SOLDER invests time and resources to provide this open source 
-code; please support UNIVERSAL-SOLDER by purchasing products from 
-UNIVERSAL-SOLDER.com online store!
-
-Copyright (c) 2020 UNIVERSAL-SOLDER Electronics Ltd. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-- Redistributions of source code must retain the above copyright notice,
-  this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
-*/
+/*!
+ * @file ES100.cpp
+ *
+ * Everset ES100 WWVB (BPSK) receiver Library V2
+ * Written by François Allard
+ * Modified by matszwe02
+ * Modified by Zach Shiner 2024
+ * 
+ * UNIVERSAL-SOLDER invests time and resources to provide this open source 
+ * code; please support UNIVERSAL-SOLDER by purchasing products from 
+ * UNIVERSAL-SOLDER.com online store!
+ * 
+ * Copyright (c) 2020 UNIVERSAL-SOLDER Electronics Ltd. All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * - Redistributions of source code must retain the above copyright notice,
+ *   this list of conditions and the following disclaimer.
+ * - Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 /******************************************************************************
  * Includes
@@ -40,7 +42,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ES100.h"
 
 #define CHANGE_I2C_CLOCK
-#define DEBUG
+//#define DEBUG
 //#define DEBUG_I2C
 
 /******************************************************************************
@@ -97,28 +99,26 @@ uint8_t ES100::startRx(bool startAntenna, bool singleAntenna)
   // False to start with Antennna 1, true for Antenna 2
   uint8_t _dataToWrite;
 
-  // Following code generates 0x01, 0x03, 0x05 or 0x09
-
   // no if() needed, equivalent to !startAntenna && !singleAntenna
-  _dataToWrite =  0b00001; // bit 0 high
+  _dataToWrite =  0x01; // bit 0 high
 
   if (startAntenna && !singleAntenna) {
-    // use anteanna 2
-    _dataToWrite += 0b01000; // bit 3 high
+    // start with antenna 2
+    _dataToWrite = 0x09; // bit 0 and 3 high
   }
 
-  if (startAntenna && singleAntenna) {
+  if (!startAntenna && singleAntenna) {
     // use antenna 1 ONLY
-    _dataToWrite += 0b00100; // bit 2 high
+    _dataToWrite = 0x05; // bit 0 and 2 high
   }
   
-  if (!startAntenna && singleAntenna) {
-    // user antenna 2 ONLY
-    _dataToWrite += 0b00010; // bit 1 high
+  if (startAntenna && singleAntenna) {
+    // use antenna 2 ONLY
+    _dataToWrite = 0x03; // bit 0 and 1 high
   }
 
   #ifdef DEBUG
-    Serial.print(F("ES100::startRx Tracking off, Anteanna "));
+    Serial.print(F("ES100::startRx Tracking off, Antenna "));
     if(!startAntenna){
       Serial.print("1");
     } else {
@@ -156,10 +156,10 @@ uint8_t ES100::startRxTracking(bool startAntenna)
   uint8_t _dataToWrite;
   if(!startAntenna) {
     // Use antenna 1
-    _dataToWrite = 0x15; //B00010101
+    _dataToWrite = 0x15; //0b00010101
   } else  {
     // Use antenna 2
-    _dataToWrite = 0x13; //B00010011
+    _dataToWrite = 0x13; //0b00010011
   }
 
   _writeRegister(ES100_CONTROL0_REG, _dataToWrite);
@@ -400,55 +400,4 @@ uint8_t ES100::_readRegister(uint8_t addr)
 	#endif
 
 	return(data);
-}
-
-void ES100::shiftTime(int *year, int *month, int *day, int *hours, int *minutes, int *seconds)
-{
-  
-		int monthDim[] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
-      
-      while(*seconds < 0) {
-        *seconds += 60;
-        *minutes -= 1;
-      }
-      while(*seconds >= 60) {
-        *seconds -= 60;
-        *minutes += 1;
-      }
-      
-      while(*minutes < 0) {
-        *minutes += 60;
-        *hours -= 1;
-      }
-      while(*minutes >= 60) {
-        *minutes -= 60;
-        *hours += 1;
-      }
-      
-      while(*hours < 0) {
-        *hours += 24;
-        *day -= 1;
-      }
-      while(*hours >= 24) {
-        *hours -= 24;
-        *day += 1;
-      }
-      
-      while(*day < 0) {
-        *month -= 1;
-        *day += monthDim[*month];
-      }
-      while(*day > monthDim[*month]) {
-        *day -= monthDim[*month];
-        *month += 1;
-      }
-      
-      while(*month > 12) {
-        *month -= 12;
-        *year += 1;
-      }
-      while(*month < 1) {
-        *month += 12;
-        *year -= 1;
-      }
 }

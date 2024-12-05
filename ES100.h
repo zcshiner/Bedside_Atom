@@ -1,5 +1,7 @@
-/*
-Everset ES100 Library V1.1 
+/*!
+ * @file ES100.h
+ *
+ * Everset ES100 WWVB (BPSK) receiver Library V2
 */
 
 #ifndef ES100_h
@@ -24,44 +26,46 @@ const uint8_t  ES100_NEXT_DST_DAY_REG 	= 0x0B;
 const uint8_t  ES100_NEXT_DST_HOUR_REG  = 0x0C;
 const uint8_t  ES100_DEVICE_ID_REG      = 0x0D;
 
+/** @brief Control0 register data */
 struct ES100Control0
 {
-  bool  start;          // When the START bit is written with a 1, the status, date, and time registers are all cleared, bits
-                        // 4:1 are sampled, and the ES100 begins receiving and processing the input signal.
-  bool  ant1off;        // ES100 stops receiving and processing the input signal. This will automatically occur at the end
-                        // of a successful reception. It can be forced to occur by the host processor writing a 0. (default)
-  bool  ant2off;        // Antenna 1 input disabled.
-                        // Antenna 1 input enabled. (default)
-  bool  startAntenna;   // Antenna 2 input disabled.
-                        // Antenna 2 input enabled. (default)
-  bool  trackingEnable; // Start reception with antenna 2.
-                        // Start reception with antenna 1. (default)
+  bool  start;          /**< When the START bit is written with a 1, the status, date, and time registers are all cleared,
+                        // bits 4:1 are sampled, and the ES100 begins receiving and processing the input signal.
+                        // Writing 0 to ES100 stops receiving and processing the input signal. This will automatically occur at the end
+                        // of a successful reception. It can be forced to occur by the host processor writing a 0. (default) */
+  bool  ant1off;        /**< 1: Antenna 1 input disabled or 0: Antenna 1 input enabled. (default) */
+  bool  ant2off;        /**< 1: Antenna 2 input disabled or 0: Antenna 2 input enabled. (default) */
+  bool  startAntenna;   /**< 1:Start reception with antenna 2 or 0: Start reception with antenna 1. (default) */
+  bool  trackingEnable; /**< 1: Tracking mode enabled or 0: Tracking mode disabled. (default) */
 };
 
+/** @brief IRQ Status register data */
 struct ES100IRQstatus
 {
-	bool  rxComplete;
-  bool  cycleComplete;
+	bool  rxComplete;     /**< 1: Reception Complete. Indicates that IRQ- went active due to a successful reception. */
+  bool  cycleComplete;  /**< 1: Cycle Complete. Indicates that IRQ- went active due to the unsuccessful completion of a reception attempt. */
 };
 
+/** @brief Status0 register data */
 struct ES100Status0
 {
 	// Data in the struct is only valid when rxOk = 1.
-	bool    rxOk;      	// 0 (0b0)  Indicates that a successful reception has not occured.
-						          // 1 (0b1)  Indicated that a successful reception has occured.
-	bool	  antenna;    // 0 (0b0)  Indicates that the reception occured on Antenna 1.
-						          // 1 (0b1)  Indicates that the reception occured on Antenna 2.
-	uint8_t	leapSecond; // 0 (0b00) Indicates that the current month WILL NOT have a leap second.
+	bool    rxOk;       /**< 0 (0b0)  Indicates that a successful reception has not occured.
+						          // 1 (0b1)  Indicated that a successful reception has occured. */
+	bool	  antenna;    /**< 0 (0b0)  Indicates that the reception occured on Antenna 1.
+						          // 1 (0b1)  Indicates that the reception occured on Antenna 2. */
+	uint8_t	leapSecond; /**< 0 (0b00) Indicates that the current month WILL NOT have a leap second.
 	                    // 2 (0b10) Indicates that the current month WILL have a negative leap second.
-						          // 3 (0b11) Indicates that the current month WILL have a positive leap second.
-	uint8_t	dstState;   // 0 (0b00) Indicates that Daylight Savings Time (DST) is not in effect.
+						          // 3 (0b11) Indicates that the current month WILL have a positive leap second. */
+	uint8_t	dstState;   /**< 0 (0b00) Indicates that Daylight Savings Time (DST) is not in effect.
 						          // 1 (0b01) Indicates that DST ends today.
 						          // 2 (0b10) Indicates that DST begins totay.
-						        	// 3 (0b11) Indicates that DST is in effect.
-	bool	  tracking;   // 0 (0b0)  Indicates that the reception attenpt was a 1-minute frame operation.
-							        // 1 (0b1)  Indicates that the reception attemps was a tracking operation.
+						        	// 3 (0b11) Indicates that DST is in effect. */
+	bool	  tracking;   /**< 0 (0b0)  Indicates that the reception attenpt was a 1-minute frame operation.
+							        // 1 (0b1)  Indicates that the reception attemps was a tracking operation. */
 };
 
+/** @brief Combined date/time register data */
 struct ES100DateTime
 {
 	uint8_t		hour;
@@ -72,6 +76,7 @@ struct ES100DateTime
 	uint8_t		year;
 };
 
+/** @brief Next DST register data */
 struct ES100NextDst
 {
 	uint8_t		month;
@@ -79,42 +84,142 @@ struct ES100NextDst
 	uint8_t		hour;
 };
 
+/** @brief Superset of Status0 and DateTime */
 struct ES100Data
 {
-  ES100Status0 Status0;
-  ES100DateTime DateTimeUTC;
+  ES100Status0 Status0;       /**< struct ES100Status0 */
+  ES100DateTime DateTimeUTC;  /**< struct ES100DateTime */
 };
 
 
-
-
+/*!
+	@brief Class to interface with ES100 Receiver
+*/
 class ES100
 {
 	public:
-    void			      begin(uint8_t int_pin, uint8_t en_pin);
-		void		    	  enable();
-		void		    	  disable();    
-    // False to start with Antennna 1, true for Antenna 2, singleAntenna disables the other antenna
+		/*!
+			@brief  Setup hardware to interface with ES100 Receiver
+			@param  int_pin  Pin number of interrupt request (IRQ) pin
+			@param  en_pin   Pin number of enable pin
+		*/
+		void begin(uint8_t int_pin, uint8_t en_pin);
+
+		/*!
+			@brief  Handshake to enable ES100 Receiver
+		*/
+		void enable();
+
+		/*!
+			@brief  Brings enable pin low to disable ES100 Receiver
+		*/
+		void disable();
+
+		/*!
+			@brief  Start a 1-Minute Frame Reception
+			@param  startAntenna   False to start with Antennna 1, true for Antenna 2
+			@param  singleAntenna  True disables the other antenna
+			@return EXIT_SUCCESS or EXIT_FAILURE
+		*/
 		uint8_t    		  startRx(bool startAntenna = false, bool singleAntenna = false);
-		uint8_t    		  startRxTracking(bool startAntenna = false);    
-		uint8_t	    	  stopRx();    
-    ES100Data       getData();
-    ES100Control0   getControl0();
-    ES100IRQstatus  getIRQStatus();
-    ES100Status0 	  getStatus0();
+
+		/*!
+			@brief  Start a Tracking Reception
+			@param  startAntenna   False to start with Antennna 1, true for Antenna 2
+			@param  singleAntenna  True disables the other antenna
+			@return EXIT_SUCCESS or EXIT_FAILURE
+		*/
+		uint8_t    		  startRxTracking(bool startAntenna = false);
+		
+		/*!
+			@brief  Write stop bit and end reception
+			@return EXIT_SUCCESS or EXIT_FAILURE
+		*/   
+		uint8_t	    	  stopRx();
+
+		/*!
+			@brief  read Status0 and combined UTC date registers from receiver
+			@return ES100Data struct
+		*/ 
+		ES100Data       getData();
+
+		/*!
+			@brief  read Control0 register from receiver
+			@return ES100Control0 struct
+		*/ 
+		ES100Control0   getControl0();
+
+		/*!
+			@brief  read IRQ Status register from receiver
+			@return ES100IRQstatus struct
+		*/ 
+		ES100IRQstatus  getIRQStatus();
+
+		/*!
+			@brief  read Status0 register from receiver
+			@return ES100Status0 struct
+		*/ 
+		ES100Status0 	  getStatus0();
+
+		/*!
+			@brief  read year, month, day, hour, minute, second registers from receiver
+					convert received data from BCD to decimal
+			@return ES100DateTime struct
+		*/ 
 		ES100DateTime   getUTCdateTime();
+
+		/*!
+			@brief  read Next DST egisters from receiver and convert from BCD to decimal
+			@return ES100NextDst struct
+		*/ 
 		ES100NextDst 	  getNextDst();
-    uint8_t		  	  getDeviceID();
+
+		/*!
+			@brief  read Device ID register from receiver
+			@return hexadecimal device ID
+		*/ 
+		uint8_t		  	  getDeviceID();
 
 	private:
 		uint8_t			_int_pin;
 		uint8_t			_en_pin;
 
-		uint8_t 	bcdToDec(uint8_t);
+		/*!
+			@brief  convert Binary Coded Decimal data to decimal
+			@param  value
+			@return decimal data
+		*/ 
+		uint8_t 	bcdToDec(uint8_t value);
+
+		/*!
+			@brief  Write data to receiver register
+			@param  addr Register address
+			@param  data Data to write
+		*/ 
 		void	  	_writeRegister(uint8_t addr, uint8_t data);
+
+		/*!
+			@brief  Read data to receiver register
+			@param  addr Register address
+			@return Data from register
+		*/ 
 		uint8_t		_readRegister(uint8_t addr);
+
+		/*!
+			@brief  Write data over I2C
+			@param  addr Register Address
+			@param  numBytes Number of bytes to write
+			@param  *ptr pointer to data to write
+		*/ 
 		void	  	_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
+
+		/*!
+			@brief  Read data over I2C
+			@param  addr Register Address
+			@param  numBytes Number of bytes to read
+			@param  *ptr pointer to read data into
+		*/ 
 		void	  	_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
-		void 		  shiftTime(int *year, int *month, int *day, int *hours, int *minutes, int *seconds);
+
 };
 #endif
