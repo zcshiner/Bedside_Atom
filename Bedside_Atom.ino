@@ -254,7 +254,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(es100_IRQ), atomic, FALLING);
 
   // Setup hardware buttons
-  const uint8_t debounceInterval = 5;
+  const uint16_t debounceInterval = 5;
+  const uint16_t debounceIntervalLong = 500;
   hourButton.attach(clockButtonPin_Hour, INPUT_PULLUP);
   minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
   TZ0switch.attach(clockSwitchPin_TZ0, INPUT_PULLUP);
@@ -265,8 +266,8 @@ void setup() {
 
   hourButton.interval(debounceInterval);
   minuteButton.interval(debounceInterval);
-  TZ0switch.interval(debounceInterval);
-  TZ1switch.interval(debounceInterval);
+  TZ0switch.interval(debounceIntervalLong);
+  TZ1switch.interval(debounceIntervalLong);
   DSTswitch.interval(debounceInterval);
 
   hourButton.setPressedState(LOW);
@@ -293,15 +294,20 @@ void setup() {
 }
 
 void loop() {
+  uint8_t timeoutCounter;  // limit how many times we retry talking to es100
+  const uint8_t timeoutLimit = 5;
+  
   // If we are not currently receiving a 1-minute frame and reception is triggered, enable ES100 and start reception
   if (!timeSyncInProgress && triggerTimeSync) {
     es100.enable();
 
-    while (es100.startRx(false, true) != EXIT_SUCCESS) {
+    timeoutCounter = 0;
+    while (es100.startRx(false, true) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
         Serial.println("StartRx did not return EXIT_SUCCESS.  Retry in 5s...");
       #endif
       delay(5000);
+      timeoutCounter++;
     }
     Serial.println("StartRx Antenna 1 only: EXIT_SUCCESS");
     
@@ -385,11 +391,13 @@ void loop() {
 
       #ifndef DEBUG_CONTINUOUS
         // Stop reception after a good decode
-        while (es100.stopRx() != EXIT_SUCCESS) {
+        timeoutCounter = 0;
+        while (false && es100.stopRx() != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
           #ifdef DEBUG
             Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
           #endif
           delay(5000);
+          timeoutCounter++;
         }
         #ifdef DEBUG
           Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
@@ -435,11 +443,13 @@ void loop() {
   // Very rarely ES100 and MCU get out of sync with each other.  Let's reset the process every two hours of searching.
   if (timeSyncInProgress && (now() - syncWatchdog) > watchdogTimeout) {
     
-    while (es100.stopRx() != EXIT_SUCCESS) {
+    timeoutCounter = 0;
+    while (false && es100.stopRx() != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
         Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
       #endif
       delay(5000);
+      timeoutCounter++;
     }
     #ifdef DEBUG
       Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
