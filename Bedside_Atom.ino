@@ -657,7 +657,10 @@ void loop() {
   }
 
   // Force a recalculate of UTC offset if time zone switches change
-  if (TZ0switch.changed() || TZ1switch.changed()) {
+  bool TZ0changed = TZ0switch.changed();
+  bool TZ1changed = TZ1switch.changed();
+
+  if (TZ0changed || TZ1changed) {
     #ifdef DEBUG
       Serial.println("TZ Switch Changed!");
     #endif
@@ -671,8 +674,8 @@ void loop() {
         matrix.clear();
         matrix.println(" -");
         int8_t tzSwitchState = 5;
-        tzSwitchState += !currentTZ0State;
-        tzSwitchState += !currentTZ1State << 1;
+        tzSwitchState += TZ0switch.isPressed();
+        tzSwitchState += TZ1switch.isPressed() << 1;
         matrix.writeDigitNum(3, tzSwitchState);
         matrix.writeDisplay();
         delay(1000);
