@@ -1,6 +1,6 @@
 /*!
  * @file Bedside_Atom.ino
- * Bedside Atom
+ * Bedside Atom V1.1
  * A WWVB syncronized tabletop clock
  *
  * Written by Zach Shiner, 2024
@@ -58,12 +58,14 @@ time_t syncWatchdog = 0;
 unsigned long secondsIndicatorMillis = 0;
 unsigned long syncCheckIntervalMillis = 0;
 unsigned long displayTimeMillis = 0;
-unsigned long executionTime = 0;
 unsigned long debugTimeMillis = 0;
 
 // Cycle Times (seconds)
 const time_t watchdogTimeout = (time_t)SECONDS_IN_HOUR * 2;
-const time_t staleTimeout = (time_t)SECONDS_IN_HOUR * 6;
+const time_t staleTimeoutShort = (time_t)SECONDS_IN_HOUR * 6;
+const time_t staleTimeoutLong = (time_t)SECONDS_IN_HOUR * 24;
+unsigned long currentExecutionTime = 0;
+unsigned long lastExecutionTime = 0;
 
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
@@ -82,8 +84,6 @@ bool indicatorAL2 = false;
 bool useTwentyFourHourTime = false; // true to use 24-hour clock
 
 // Local time settings
-//const int8_t timezone = -5;   // America/New_York
-
 int8_t timezone = 0;
 int8_t UTCoffset = 0;
 time_t localTime = 0;
@@ -462,8 +462,10 @@ void loop() {
     syncWatchdog = now();
   }
 
-  // Receive the current time on an schedule
-  // Also evaluate if DST is changing
+  // Coarse Update Schedule
+  //   - Receive the current time on an schedule
+  //   - Evaluate if DST is changing
+  //   - Set stale indicators
   if (syncCheckIntervalMillis + 10000 < millis()) {
 
     // Are we currently recieving the time?
@@ -524,10 +526,13 @@ void loop() {
     // Blink display separator every second
     indicatorSecondsSeparator = !indicatorSecondsSeparator;
 
-    // If time is unset or expired, twinkle the alarm lights
-    if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeout){
-      indicatorAL1 = !indicatorAL1;
-      indicatorAL2 = !indicatorAL1;
+    // Indicate if time is unset or exceeds short stale timeout
+    if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort){
+      indicatorAL1 = true;
+      // Indicate if time exceeds long stale timeout
+      if ((now() - lastGoodSyncTime) > staleTimeoutLong) {
+        indicatorAL2 = true;
+      }
     } 
     // Otherwise turn them off
     else {
@@ -540,39 +545,39 @@ void loop() {
 
 
   //Send updates to the display driver
-  if(displayTimeMillis + 50 < millis()){ // make this faster later
+  if(displayTimeMillis + 50 < millis()){
     localTime = now();
     localTime += (time_t)UTCoffset * SECONDS_IN_HOUR;
 
     #ifndef DISABLE_DISPLAY
-    useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
+      useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
 
-    if(useTwentyFourHourTime){
-      matrix.writeDigitNum(0, hour(localTime) / 10);
-      matrix.writeDigitNum(1, hour(localTime) % 10);
-      indicatorPM = false;
-    }
-    else {
-      if(hourFormat12(localTime) < 10){ // in 12-hour time first digit is 1 or blank
-        matrix.writeDigitRaw(0, 0b00000000);
-      } else {
-        matrix.writeDigitNum(0, 1);
+      if(useTwentyFourHourTime){
+        matrix.writeDigitNum(0, hour(localTime) / 10);
+        matrix.writeDigitNum(1, hour(localTime) % 10);
+        indicatorPM = false;
       }
-      matrix.writeDigitNum(1, hourFormat12(localTime) % 10);
-      indicatorPM = isPM(localTime);
-    }
+      else {
+        if(hourFormat12(localTime) < 10){ // in 12-hour time first digit is 1 or blank
+          matrix.writeDigitRaw(0, 0b00000000);
+        } else {
+          matrix.writeDigitNum(0, 1);
+        }
+        matrix.writeDigitNum(1, hourFormat12(localTime) % 10);
+        indicatorPM = isPM(localTime);
+      }
 
-    matrix.writeDigitNum(3, minute(localTime) / 10);
-    matrix.writeDigitNum(4, minute(localTime) % 10);
+      matrix.writeDigitNum(3, minute(localTime) / 10);
+      matrix.writeDigitNum(4, minute(localTime) % 10);
 
-    uint8_t rawToWrite;
-    rawToWrite =  0b00000001 * indicatorAL1;
-    rawToWrite += 0b00000010 * indicatorAL2;
-    rawToWrite += 0b00001100 * indicatorSecondsSeparator;
-    rawToWrite += 0b00010000 * indicatorPM;
-    matrix.writeDigitRaw(2, rawToWrite);
-    
-    matrix.writeDisplay();
+      uint8_t rawToWrite;
+      rawToWrite =  0b00000001 * indicatorAL1;
+      rawToWrite += 0b00000010 * indicatorAL2;
+      rawToWrite += 0b00001100 * indicatorSecondsSeparator;
+      rawToWrite += 0b00010000 * indicatorPM;
+      matrix.writeDigitRaw(2, rawToWrite);
+      
+      matrix.writeDisplay();
     #endif
 
     displayTimeMillis = millis();
@@ -614,9 +619,9 @@ void loop() {
       Serial.print("UTC Offset: ");
       Serial.print(UTCoffset);
       Serial.print("\tExec Time: ");
-      Serial.print((micros() - executionTime)/1000);
+      Serial.print(currentExecutionTime / 1000);
       Serial.print(".");
-      Serial.print((micros() - executionTime)%1000);
+      Serial.print(currentExecutionTime % 1000);
       Serial.println("ms");
 
       debugTimeMillis = millis();
@@ -657,9 +662,23 @@ void loop() {
       Serial.println("TZ Switch Changed!");
     #endif
 
-    if(timeStatus() != timeNotSet){
+    if(timeStatus() != timeNotSet) {
       calculateUTCoffset();
     }
+
+    #ifndef DISABLE_DISPLAY
+      if(timeStatus() == timeNotSet) {
+        matrix.clear();
+        matrix.println(" -");
+        int8_t tzSwitchState = 5;
+        tzSwitchState += !currentTZ0State;
+        tzSwitchState += !currentTZ1State << 1;
+        matrix.writeDigitNum(3, tzSwitchState);
+        matrix.writeDisplay();
+        delay(1000);
+        matrix.clear();
+      }
+    #endif
   }
 
   // Force a recalculate of UTC offset if DST switch changes
@@ -668,7 +687,7 @@ void loop() {
       Serial.println("DST Switch Changed!");
     #endif
 
-    if(timeStatus() != timeNotSet){
+    if(timeStatus() != timeNotSet) {
       calculateUTCoffset();
     }
 
@@ -689,6 +708,7 @@ void loop() {
 
   #ifdef DEBUG
     // Keep track of execution time
-    executionTime = micros();
+    currentExecutionTime = micros() - lastExecutionTime;
+    lastExecutionTime = micros();
   #endif
 }
