@@ -20,8 +20,6 @@ ES100 es100;
 Adafruit_7segment matrix = Adafruit_7segment();
 Bounce2::Button hourButton = Bounce2::Button();
 Bounce2::Button minuteButton = Bounce2::Button();
-Bounce2::Button TZ0switch = Bounce2::Button();
-Bounce2::Button TZ1switch = Bounce2::Button();
 Bounce2::Button DSTswitch = Bounce2::Button();
 
 // Compile debug/options
@@ -59,13 +57,15 @@ unsigned long secondsIndicatorMillis = 0;
 unsigned long syncCheckIntervalMillis = 0;
 unsigned long displayTimeMillis = 0;
 unsigned long debugTimeMillis = 0;
+unsigned long currentExecutionTime = 0;
+unsigned long lastExecutionTime = 0;
+
+uint8_t lastTZswitch = 0;
 
 // Cycle Times (seconds)
 const time_t watchdogTimeout = (time_t)SECONDS_IN_HOUR * 2;
 const time_t staleTimeoutShort = (time_t)SECONDS_IN_HOUR * 6;
 const time_t staleTimeoutLong = (time_t)SECONDS_IN_HOUR * 24;
-unsigned long currentExecutionTime = 0;
-unsigned long lastExecutionTime = 0;
 
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
@@ -114,6 +114,13 @@ void printES100DateTime(ES100DateTime dt) {
   Serial.println(dt.second);
 }
 
+inline uint8_t decodeTZswitch() {
+  uint8_t timeZoneSwitch; // position 0 through 3
+  timeZoneSwitch = !digitalRead(clockSwitchPin_TZ0);
+  timeZoneSwitch += !digitalRead(clockSwitchPin_TZ1) << 1;
+  return timeZoneSwitch;
+}
+
 void updateTime(ES100DateTime dt) {
   // Align time update with the atomic offset
   // Calculated number of ms needed to get to a multiple of 1000ms away from atomicMillis
@@ -136,11 +143,7 @@ void calculateUTCoffset(){
     Serial.println("Calculating UTC offset");
   #endif
 
-  int8_t timeZoneSwitch; // position 0 through 3
-  timeZoneSwitch = TZ0switch.isPressed();
-  timeZoneSwitch += TZ1switch.isPressed() << 1;
-
-  timezone = -5 - timeZoneSwitch;
+  timezone = -5 - decodeTZswitch();
   UTCoffset = timezone;
 
   if (DSTswitch.isPressed()) {
@@ -255,25 +258,20 @@ void setup() {
 
   // Setup hardware buttons
   const uint16_t debounceInterval = 5;
-  const uint16_t debounceIntervalLong = 500;
   hourButton.attach(clockButtonPin_Hour, INPUT_PULLUP);
   minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
-  TZ0switch.attach(clockSwitchPin_TZ0, INPUT_PULLUP);
-  TZ1switch.attach(clockSwitchPin_TZ1, INPUT_PULLUP);
   DSTswitch.attach(clockSwitchPin_DST, INPUT_PULLUP);
 
   pinMode(clockSwitchPin_24HR, INPUT_PULLUP);
+  pinMode(clockSwitchPin_TZ0, INPUT_PULLUP);
+  pinMode(clockSwitchPin_TZ1, INPUT_PULLUP);
 
   hourButton.interval(debounceInterval);
   minuteButton.interval(debounceInterval);
-  TZ0switch.interval(debounceIntervalLong);
-  TZ1switch.interval(debounceIntervalLong);
   DSTswitch.interval(debounceInterval);
 
   hourButton.setPressedState(LOW);
   minuteButton.setPressedState(LOW);
-  TZ0switch.setPressedState(LOW);
-  TZ1switch.setPressedState(LOW);
   DSTswitch.setPressedState(HIGH);
   
   #ifdef DEBUG
@@ -291,6 +289,7 @@ void setup() {
     Serial.println("Finished setup");
   #endif
 
+  lastTZswitch = decodeTZswitch();
 }
 
 void loop() {
@@ -622,19 +621,16 @@ void loop() {
       Serial.print(currentExecutionTime / 1000);
       Serial.print(".");
       Serial.print(currentExecutionTime % 1000);
-      Serial.println("ms");
+      Serial.print("ms\tTZ: ");
+      Serial.println(decodeTZswitch());
 
       debugTimeMillis = millis();
     }
   #endif
 
-
   hourButton.update();
   minuteButton.update();
-  TZ0switch.update();
-  TZ1switch.update();
   DSTswitch.update();
-  
 
   // Advance hour with button press
   if(hourButton.pressed()){
@@ -657,32 +653,35 @@ void loop() {
   }
 
   // Force a recalculate of UTC offset if time zone switches change
-  bool TZ0changed = TZ0switch.changed();
-  bool TZ1changed = TZ1switch.changed();
+  uint8_t currentTZswitch = decodeTZswitch();
+  if (lastTZswitch != currentTZswitch) {
+    // delay 100ms, then re-read;  Shorting-style switch can cause misreads
+    delay(100);
 
-  if (TZ0changed || TZ1changed) {
     #ifdef DEBUG
-      Serial.println("TZ Switch Changed!");
+      currentTZswitch = decodeTZswitch();
+      Serial.print("TZ Switch Changed! Now: ");
+      Serial.println(currentTZswitch);
     #endif
-
-    if(timeStatus() != timeNotSet) {
-      calculateUTCoffset();
-    }
 
     #ifndef DISABLE_DISPLAY
       if(timeStatus() == timeNotSet) {
         matrix.clear();
         matrix.println(" -");
-        int8_t tzSwitchState = 5;
-        tzSwitchState += TZ0switch.isPressed();
-        tzSwitchState += TZ1switch.isPressed() << 1;
+        int8_t tzSwitchState = 5 + currentTZswitch;
         matrix.writeDigitNum(3, tzSwitchState);
         matrix.writeDisplay();
         delay(1000);
         matrix.clear();
       }
     #endif
+
+    if(timeStatus() != timeNotSet) {
+      calculateUTCoffset();
+    }
+
   }
+  lastTZswitch = currentTZswitch;
 
   // Force a recalculate of UTC offset if DST switch changes
   if (DSTswitch.changed()) {
