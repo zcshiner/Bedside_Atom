@@ -1,30 +1,26 @@
 /*!
  * @file ES100.h
  *
- * Everset ES100 WWVB (BPSK) receiver Library V2
+ * Everset ES100 WWVB (BPSK) receiver Library V2.1
 */
 
 #ifndef ES100_h
 #define ES100_h
 
-const uint32_t CLOCK_FREQ    = 100000;		// Hz
-const uint32_t DEFAULT_CLOCK = 400000;		// Hz
+/** @brief DST State decode names */
+enum dstState_codes{
+  DSTinactive = 0b00,
+  DSTend = 0b01,
+  DSTbegin = 0b10,
+  DSTactive = 0b11
+};
 
-const uint8_t  ES100_ADDR               =	0x32;		// ES100 i2c Address
-const uint8_t  ES100_CONTROL0_REG       =	0x00;
-const uint8_t  ES100_CONTROL1_REG       = 0x01;
-const uint8_t  ES100_IRQ_STATUS_REG     = 0x02;
-const uint8_t  ES100_STATUS0_REG        = 0x03;
-const uint8_t  ES100_YEAR_REG           = 0x04;
-const uint8_t  ES100_MONTH_REG          = 0x05;
-const uint8_t  ES100_DAY_REG            = 0x06;
-const uint8_t  ES100_HOUR_REG	          =	0x07;
-const uint8_t  ES100_MINUTE_REG	        = 0x08;
-const uint8_t  ES100_SECOND_REG	        = 0x09;
-const uint8_t  ES100_NEXT_DST_MONTH_REG =	0x0A;
-const uint8_t  ES100_NEXT_DST_DAY_REG 	= 0x0B;
-const uint8_t  ES100_NEXT_DST_HOUR_REG  = 0x0C;
-const uint8_t  ES100_DEVICE_ID_REG      = 0x0D;
+/** @brief Leap Second decode names */
+enum leapSecond_codes{
+  noLeapSecond = 0b00,
+  positiveLeapSecond = 0b10,
+  negativeLeapSecond = 0b11
+};
 
 /** @brief Control0 register data */
 struct ES100Control0
@@ -50,19 +46,20 @@ struct ES100IRQstatus
 struct ES100Status0
 {
 	// Data in the struct is only valid when rxOk = 1.
-	bool    rxOk;       /**< 0 (0b0)  Indicates that a successful reception has not occured.
-						          // 1 (0b1)  Indicated that a successful reception has occured. */
-	bool	  antenna;    /**< 0 (0b0)  Indicates that the reception occured on Antenna 1.
-						          // 1 (0b1)  Indicates that the reception occured on Antenna 2. */
-	uint8_t	leapSecond; /**< 0 (0b00) Indicates that the current month WILL NOT have a leap second.
-	                    // 2 (0b10) Indicates that the current month WILL have a negative leap second.
-						          // 3 (0b11) Indicates that the current month WILL have a positive leap second. */
-	uint8_t	dstState;   /**< 0 (0b00) Indicates that Daylight Savings Time (DST) is not in effect.
-						          // 1 (0b01) Indicates that DST ends today.
-						          // 2 (0b10) Indicates that DST begins totay.
-						        	// 3 (0b11) Indicates that DST is in effect. */
-	bool	  tracking;   /**< 0 (0b0)  Indicates that the reception attenpt was a 1-minute frame operation.
-							        // 1 (0b1)  Indicates that the reception attemps was a tracking operation. */
+	bool    rxOk;       /**<  0 (0b0)  Indicates that a successful reception has not occured.
+                            1 (0b1)  Indicated that a successful reception has occured. */
+	bool	  antenna;    /**<  0 (0b0)  Indicates that the reception occured on Antenna 1.
+                            1 (0b1)  Indicates that the reception occured on Antenna 2. */
+	leapSecond_codes	leapSecond; /**< noLeapSecond: 0 (0b00) Indicates that the current month WILL NOT have a leap second.
+                                noLeapSecond:       1 (0b01) Also indicates that the current month WILL NOT have a leap second.
+                                positiveLeapSecond: 2 (0b10) Indicates that the current month WILL have a negative leap second.
+                                negativeLeapSecond: 3 (0b11) Indicates that the current month WILL have a positive leap second. */
+	dstState_codes	dstState; /**<  DSTinactive: 0 (0b00) Indicates that Daylight Savings Time (DST) is not in effect.
+                                  DSTend:      1 (0b01) Indicates that DST ends today.
+                                  DSTbegin:    2 (0b10) Indicates that DST begins totay.
+                                  DSTactive:   3 (0b11) Indicates that DST is in effect. */
+	bool	  tracking;   /**<  0 (0b0)  Indicates that the reception attenpt was a 1-minute frame operation.
+                            1 (0b1)  Indicates that the reception attemps was a tracking operation. */
 };
 
 /** @brief Combined date/time register data */
@@ -181,7 +178,26 @@ class ES100
 		uint8_t		  	  getDeviceID();
 
 	private:
-		uint8_t			_int_pin;
+    const uint32_t CLOCK_FREQ    = 100000;		// Hz
+    const uint32_t DEFAULT_CLOCK = 400000;		// Hz
+
+    const uint8_t  ES100_ADDR               =	0x32;		// ES100 i2c Address
+    const uint8_t  ES100_CONTROL0_REG       =	0x00;
+    const uint8_t  ES100_CONTROL1_REG       = 0x01;
+    const uint8_t  ES100_IRQ_STATUS_REG     = 0x02;
+    const uint8_t  ES100_STATUS0_REG        = 0x03;
+    const uint8_t  ES100_YEAR_REG           = 0x04;
+    const uint8_t  ES100_MONTH_REG          = 0x05;
+    const uint8_t  ES100_DAY_REG            = 0x06;
+    const uint8_t  ES100_HOUR_REG	          =	0x07;
+    const uint8_t  ES100_MINUTE_REG	        = 0x08;
+    const uint8_t  ES100_SECOND_REG	        = 0x09;
+    const uint8_t  ES100_NEXT_DST_MONTH_REG =	0x0A;
+    const uint8_t  ES100_NEXT_DST_DAY_REG 	= 0x0B;
+    const uint8_t  ES100_NEXT_DST_HOUR_REG  = 0x0C;
+    const uint8_t  ES100_DEVICE_ID_REG      = 0x0D;
+		
+    uint8_t			_int_pin;
 		uint8_t			_en_pin;
 
 		/*!

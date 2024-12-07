@@ -1,7 +1,7 @@
 /*!
  * @file ES100.cpp
  *
- * Everset ES100 WWVB (BPSK) receiver Library V2
+ * Everset ES100 WWVB (BPSK) receiver Library V2.1
  * Written by François Allard
  * Modified by matszwe02
  * Modified by Zach Shiner 2024
@@ -244,8 +244,8 @@ ES100Status0 ES100::getStatus0()
 
 	data.rxOk       = (_registerData & 0b00000001);      // bit 0
 	data.antenna    = (_registerData & 0b00000010) >> 1; // bit 1
-	data.leapSecond	= (_registerData & 0b00011000) >> 3; // bits 3 & 4
-	data.dstState   = (_registerData & 0b01100000) >> 5; // bits 5 & 6
+	data.leapSecond	= (leapSecond_codes)( (_registerData & 0b00011000) >> 3 ); // bits 3 & 4
+  data.dstState   = (dstState_codes)( (_registerData & 0b01100000) >> 5 ); // bits 5 & 6	
 	data.tracking   = (_registerData & 0b10000000) >> 7; // bit 7
 
 	return data;

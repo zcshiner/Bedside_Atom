@@ -1,6 +1,6 @@
 /*!
  * @file Bedside_Atom.ino
- * Bedside Atom V1.1
+ * Bedside Atom V1.2
  * A WWVB syncronized tabletop clock
  *
  * Written by Zach Shiner, 2024
@@ -151,7 +151,7 @@ void calculateUTCoffset(){
 
   if (DSTswitch.isPressed()) {
     // If DST begins today
-    if (validES100Data.Status0.dstState == 0b10){
+    if (validES100Data.Status0.dstState == DSTbegin){
       if (hour() < 2 - timezone){
         UTCoffset = timezone;
       } else {
@@ -160,7 +160,7 @@ void calculateUTCoffset(){
     } else
 
     // If DST ends today
-    if (validES100Data.Status0.dstState == 0b01){
+    if (validES100Data.Status0.dstState == DSTend){
       if (hour() < 2 - timezone - 1){
         UTCoffset = timezone + 1;
       } else {
@@ -169,7 +169,7 @@ void calculateUTCoffset(){
     } else
 
     // If DST is in effect
-    if (validES100Data.Status0.dstState == 0b11){
+    if (validES100Data.Status0.dstState == DSTactive){
       UTCoffset = timezone + 1;
     }
   }
@@ -414,8 +414,6 @@ void loop() {
         Serial.println(lastReadStatus0.rxOk, BIN);
         Serial.print("status0.antenna = 0b");
         Serial.println(lastReadStatus0.antenna, BIN);
-        Serial.print("status0.leapSecond = 0b");
-        Serial.println(lastReadStatus0.leapSecond, BIN);
         Serial.print("status0.dstState = 0b");
         Serial.println(lastReadStatus0.dstState, BIN);
         Serial.print("status0.tracking = 0b");
@@ -552,7 +550,7 @@ void loop() {
   DSTswitch.update();
 
   // Advance hour with a single button press less than the hold threshold
-  if (hourButton.released() && hourButton.previousDuration() < holdThreshold){
+  if (hourButton.released() && hourButton.previousDuration() < (holdThreshold / 2)){
     #ifdef DEBUG
       Serial.println("HOUR Pressed\t");
     #endif
@@ -562,7 +560,7 @@ void loop() {
   }
 
   // Advance minute with a single button press less than the hold threshold
-  if (minuteButton.released() && minuteButton.previousDuration() < holdThreshold){
+  if (minuteButton.released() && minuteButton.previousDuration() < (holdThreshold / 2)){
     #ifdef DEBUG
       Serial.println("MINUTE Pressed\t");
     #endif
@@ -709,7 +707,7 @@ void loop() {
   #endif
 
   #ifdef DEBUG_CLOCK
-    if(debugTimeMillis + 200 < millis()){
+    if(debugTimeMillis + 252 < millis()){
       if(indicatorPM){
         Serial.print("PM ");
       } else{
@@ -747,6 +745,9 @@ void loop() {
       Serial.print(currentExecutionTime / 1000);
       Serial.print(".");
       Serial.print(currentExecutionTime % 1000);
+      if (currentExecutionTime % 1000 < 100) {
+        Serial.print(0);
+      }
       Serial.print("ms\tTZ: ");
       Serial.println(decodeTZswitch());
 
