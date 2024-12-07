@@ -60,8 +60,10 @@ unsigned long debugTimeMillis = 0;
 unsigned long currentExecutionTime = 0;
 unsigned long lastExecutionTime = 0;
 
+// Switch interactions
 uint8_t lastTZswitch = 0;
 uint8_t heldLoops = 0;
+const uint16_t holdThreshold = 800; //ms
 
 // Cycle Times (seconds)
 const unsigned long watchdogTimeout = (unsigned long)SECONDS_IN_HOUR * 2;
@@ -549,8 +551,8 @@ void loop() {
   minuteButton.update();
   DSTswitch.update();
 
-  // Advance hour with a single button press
-  if (hourButton.pressed()){
+  // Advance hour with a single button press less than the hold threshold
+  if (hourButton.released() && hourButton.previousDuration() < holdThreshold){
     #ifdef DEBUG
       Serial.println("HOUR Pressed\t");
     #endif
@@ -559,19 +561,8 @@ void loop() {
     lastGoodSyncTime = now();
   }
 
-  // Advance hour with a held button press
-  if (hourButton.isPressed() && hourButton.currentDuration() > 800 + (200 * heldLoops)) {
-    #ifdef DEBUG
-      Serial.println("HOUR Held\t");
-    #endif
-
-    adjustTime(SECONDS_IN_HOUR);
-    heldLoops++;
-    lastGoodSyncTime = now();
-  }
-
-  // Advance minute with a single button press
-  if (minuteButton.pressed()){
+  // Advance minute with a single button press less than the hold threshold
+  if (minuteButton.released() && minuteButton.previousDuration() < holdThreshold){
     #ifdef DEBUG
       Serial.println("MINUTE Pressed\t");
     #endif
@@ -585,8 +576,8 @@ void loop() {
     }
   }
 
-  // Advance minute with a held button press
-  if (minuteButton.isPressed() && minuteButton.currentDuration() > 800 + (125 * heldLoops)) {
+  // Advance minute with a button held longer than than the hold threshold
+  if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops)) {
     #ifdef DEBUG
       Serial.println("MINUTE Held\t");
     #endif
@@ -599,6 +590,73 @@ void loop() {
     if (minute(lastGoodSyncTime) == 0) {
       adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
     }
+  }
+  
+  // Advance hour with a button held longer than than the hold threshold
+  if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops)) {
+    #ifdef DEBUG
+      Serial.println("HOUR Held\t");
+    #endif
+
+    adjustTime(SECONDS_IN_HOUR);
+    heldLoops++;
+    lastGoodSyncTime = now();
+  }
+
+  // Show sync status if both adjust buttons are held
+  if (minuteButton.isPressed() && hourButton.isPressed() && minuteButton.currentDuration() > 1000 && hourButton.currentDuration() > 1000 && heldLoops == 0) {
+    #ifndef DISABLE_DISPLAY
+      matrix.clear();
+      matrix.println("LASt");
+      matrix.writeDisplay();
+      delay(1000);
+      matrix.println("SYNC");
+      matrix.writeDisplay();
+      delay(1000);
+      matrix.clear();
+
+      time_t syncAge = now() - lastGoodSyncTime;
+
+      // display in days
+      if (elapsedDays(syncAge) > 2) {
+        matrix.println(elapsedDays(syncAge));
+        matrix.writeDisplay();
+        delay(1500);
+        matrix.println("DAYS");
+      } else {
+
+        // would have been nice if this macro was in TimeLib
+        #define elapsedHours(_time_) ((_time_) / SECS_PER_HOUR)  // this is number of hours since Jan 1 1970
+
+        // display in hours
+        if (elapsedHours(syncAge) > 0) {
+          matrix.writeDigitNum(0, elapsedHours(syncAge) / 10);
+          matrix.writeDigitNum(1, elapsedHours(syncAge) % 10);
+          matrix.writeDigitAscii(3, 'h');
+          matrix.writeDigitAscii(4, 'r');
+        } else {
+
+          // display "----" if we have not yet synced (or adjusted)
+          if (lastGoodSyncTime == 0) {
+            matrix.println("----");
+          } else {
+
+            // display in seconds because M can't be drawin on 7 segment display
+            // the character S also looks like a 5 which is not ideal
+            matrix.println(syncAge);
+            matrix.writeDisplay();
+            delay(1500);
+            matrix.println(" SEC");
+          }
+        }
+      }
+
+      matrix.writeDisplay();
+      delay(2000);
+      matrix.clear();
+
+      heldLoops++;
+    #endif
   }
 
   if (!minuteButton.isPressed() && !hourButton.isPressed()) {
@@ -643,6 +701,12 @@ void loop() {
 
     displayTimeMillis = millis();
   }
+
+  #ifdef DEBUG
+    // Keep track of execution time
+    currentExecutionTime = micros() - lastExecutionTime;
+    lastExecutionTime = micros();
+  #endif
 
   #ifdef DEBUG_CLOCK
     if(debugTimeMillis + 200 < millis()){
@@ -744,11 +808,5 @@ void loop() {
   #ifdef SYNC_LED
     // Turn onboard led on and off with the enable status
     digitalWrite(LED_BUILTIN, digitalRead(es100_EN));
-  #endif
-
-  #ifdef DEBUG
-    // Keep track of execution time
-    currentExecutionTime = micros() - lastExecutionTime;
-    lastExecutionTime = micros();
   #endif
 }
