@@ -560,7 +560,7 @@ void loop() {
   }
 
   // Advance hour with a held button press
-  if (hourButton.isPressed() && hourButton.currentDuration() > 800 + (150 * heldLoops)) {
+  if (hourButton.isPressed() && hourButton.currentDuration() > 800 + (200 * heldLoops)) {
     #ifdef DEBUG
       Serial.println("HOUR Held\t");
     #endif
@@ -577,11 +577,16 @@ void loop() {
     #endif
 
     adjustTime(SECONDS_IN_MINUTE);
-    lastGoodSyncTime = now(); 
+    lastGoodSyncTime = now();
+    
+    // Undo rollover of minute
+    if (minute(lastGoodSyncTime) == 0) {
+      adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+    }
   }
 
   // Advance minute with a held button press
-  if (minuteButton.isPressed() && minuteButton.currentDuration() > 800 + (150 * heldLoops)) {
+  if (minuteButton.isPressed() && minuteButton.currentDuration() > 800 + (125 * heldLoops)) {
     #ifdef DEBUG
       Serial.println("MINUTE Held\t");
     #endif
@@ -589,6 +594,11 @@ void loop() {
     adjustTime(SECONDS_IN_MINUTE);
     heldLoops++;
     lastGoodSyncTime = now();
+    
+    // Undo rollover of minute
+    if (minute(lastGoodSyncTime) == 0) {
+      adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+    }
   }
 
   if (!minuteButton.isPressed() && !hourButton.isPressed()) {
