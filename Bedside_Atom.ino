@@ -275,7 +275,7 @@ void setup() {
 
   hourButton.setPressedState(LOW);
   minuteButton.setPressedState(LOW);
-  DSTswitch.setPressedState(HIGH);
+  DSTswitch.setPressedState(LOW);
   
   #ifdef DEBUG
     delay(1000);
