@@ -61,6 +61,7 @@ unsigned long currentExecutionTime = 0;
 unsigned long lastExecutionTime = 0;
 
 uint8_t lastTZswitch = 0;
+uint8_t heldLoops = 0;
 
 // Cycle Times (seconds)
 const time_t watchdogTimeout = (time_t)SECONDS_IN_HOUR * 2;
@@ -187,6 +188,10 @@ void setup() {
     matrix.writeDisplay(); 
     delay(3000);
 
+    #if defined(DEBUG) || defined(DEBUG_CLOCK)
+      Serial.begin(baudrate);
+    #endif
+
     // Encircle display startup animation
     const uint8_t animateDelay = 80;
     for (uint8_t i = 0; i < 6; i++) {
@@ -244,8 +249,6 @@ void setup() {
   #endif
 
   #if defined(DEBUG) || defined(DEBUG_CLOCK)
-    Serial.begin(baudrate);
-
     while(!Serial && millis() < 5000) {
       // Wait for serial to connect
     }
@@ -275,7 +278,7 @@ void setup() {
   DSTswitch.setPressedState(HIGH);
   
   #ifdef DEBUG
-    delay(3000);
+    delay(1000);
     es100.enable();
     uint8_t deviceID = es100.getDeviceID();
     Serial.print("Device ID: 0x");
@@ -542,6 +545,55 @@ void loop() {
     secondsIndicatorMillis = millis();
   }
 
+  hourButton.update();
+  minuteButton.update();
+  DSTswitch.update();
+
+  // Advance hour with a single button press
+  if (hourButton.pressed()){
+    #ifdef DEBUG
+      Serial.println("HOUR Pressed\t");
+    #endif
+
+    adjustTime(SECONDS_IN_HOUR);
+    lastGoodSyncTime = now();
+  }
+
+  // Advance hour with a held button press
+  if (hourButton.isPressed() && hourButton.currentDuration() > 800 + (150 * heldLoops)) {
+    #ifdef DEBUG
+      Serial.println("HOUR Held\t");
+    #endif
+
+    adjustTime(SECONDS_IN_HOUR);
+    heldLoops++;
+    lastGoodSyncTime = now();
+  }
+
+  // Advance minute with a single button press
+  if (minuteButton.pressed()){
+    #ifdef DEBUG
+      Serial.println("MINUTE Pressed\t");
+    #endif
+
+    adjustTime(SECONDS_IN_MINUTE);
+    lastGoodSyncTime = now(); 
+  }
+
+  // Advance minute with a held button press
+  if (minuteButton.isPressed() && minuteButton.currentDuration() > 800 + (150 * heldLoops)) {
+    #ifdef DEBUG
+      Serial.println("MINUTE Held\t");
+    #endif
+
+    adjustTime(SECONDS_IN_MINUTE);
+    heldLoops++;
+    lastGoodSyncTime = now();
+  }
+
+  if (!minuteButton.isPressed() && !hourButton.isPressed()) {
+    heldLoops = 0;
+  }
 
   //Send updates to the display driver
   if(displayTimeMillis + 50 < millis()){
@@ -627,30 +679,6 @@ void loop() {
       debugTimeMillis = millis();
     }
   #endif
-
-  hourButton.update();
-  minuteButton.update();
-  DSTswitch.update();
-
-  // Advance hour with button press
-  if(hourButton.pressed()){
-    #ifdef DEBUG
-      Serial.println("HOUR Pressed\t");
-    #endif
-
-    adjustTime(SECONDS_IN_HOUR);
-    lastGoodSyncTime = now(); 
-  }
-
-  // Advance minute with button press
-  if(minuteButton.pressed()){
-    #ifdef DEBUG
-      Serial.println("MINUTE Pressed\t");
-    #endif
-
-    adjustTime(SECONDS_IN_MINUTE);
-    lastGoodSyncTime = now(); 
-  }
 
   // Force a recalculate of UTC offset if time zone switches change
   uint8_t currentTZswitch = decodeTZswitch();
