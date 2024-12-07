@@ -64,7 +64,7 @@ uint8_t lastTZswitch = 0;
 uint8_t heldLoops = 0;
 
 // Cycle Times (seconds)
-const unsigned long watchdogTimeout = 100;//(unsigned long)SECONDS_IN_HOUR * 2;
+const unsigned long watchdogTimeout = (unsigned long)SECONDS_IN_HOUR * 2;
 const time_t staleTimeoutShort = (time_t)SECONDS_IN_HOUR * 6;
 const time_t staleTimeoutLong = (time_t)SECONDS_IN_HOUR * 24;
 
@@ -532,7 +532,7 @@ void loop() {
     if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort){
       indicatorAL1 = true;
       // Indicate if time exceeds long stale timeout
-      if ((now() - lastGoodSyncTime) > staleTimeoutLong) {
+      if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutLong) {
         indicatorAL2 = true;
       }
     } 
