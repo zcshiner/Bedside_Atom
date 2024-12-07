@@ -50,7 +50,7 @@ volatile uint8_t interruptCount = 0;
 uint8_t lastInterruptCount = 0;
 time_t lastGoodSyncTime = 0;
 time_t lastSyncAttempt = 0;
-time_t syncWatchdog = 0;
+unsigned long syncWatchdog = 0;
 
 // Timestamps for faux multitasking
 unsigned long secondsIndicatorMillis = 0;
@@ -64,7 +64,7 @@ uint8_t lastTZswitch = 0;
 uint8_t heldLoops = 0;
 
 // Cycle Times (seconds)
-const time_t watchdogTimeout = (time_t)SECONDS_IN_HOUR * 2;
+const unsigned long watchdogTimeout = 100;//(unsigned long)SECONDS_IN_HOUR * 2;
 const time_t staleTimeoutShort = (time_t)SECONDS_IN_HOUR * 6;
 const time_t staleTimeoutLong = (time_t)SECONDS_IN_HOUR * 24;
 
@@ -314,7 +314,7 @@ void loop() {
     Serial.println("StartRx Antenna 1 only: EXIT_SUCCESS");
     
     lastSyncAttempt = now();
-    syncWatchdog = lastSyncAttempt;
+    syncWatchdog = millis();
     timeSyncInProgress = true;
     triggerTimeSync = false;
 
@@ -443,7 +443,7 @@ void loop() {
   }
 
   // Very rarely ES100 and MCU get out of sync with each other.  Let's reset the process every two hours of searching.
-  if (timeSyncInProgress && (now() - syncWatchdog) > watchdogTimeout) {
+  if (timeSyncInProgress && (millis() - syncWatchdog) > (watchdogTimeout * 1000)) {
     
     timeoutCounter = 0;
     while (false && es100.stopRx() != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
@@ -461,7 +461,7 @@ void loop() {
 
     triggerTimeSync = true;
     timeSyncInProgress = false;
-    syncWatchdog = now();
+    syncWatchdog = millis();
   }
 
   // Coarse Update Schedule
@@ -664,7 +664,7 @@ void loop() {
       }
       if(timeSyncInProgress){
         Serial.print("Watchdog: ");
-        Serial.print(watchdogTimeout + syncWatchdog - now());
+        Serial.print(watchdogTimeout - ((millis() - syncWatchdog) / 1000));
         Serial.print("\t");
       }
       Serial.print("UTC Offset: ");
