@@ -292,6 +292,9 @@ void setup() {
       Serial.println("Error: Device ID mismatch");
     }
     Serial.println("Finished setup");
+    
+    lastInterruptCount = 0;
+    interruptCount = 0;
   #endif
 
   lastTZswitch = decodeTZswitch();
@@ -571,11 +574,12 @@ void loop() {
     // Undo rollover of minute
     if (minute(lastGoodSyncTime) == 0) {
       adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+      lastGoodSyncTime = now();
     }
   }
 
   // Advance minute with a button held longer than than the hold threshold
-  if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops)) {
+  if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
     #ifdef DEBUG
       Serial.println("MINUTE Held\t");
     #endif
@@ -587,11 +591,12 @@ void loop() {
     // Undo rollover of minute
     if (minute(lastGoodSyncTime) == 0) {
       adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+      lastGoodSyncTime = now();
     }
   }
   
   // Advance hour with a button held longer than than the hold threshold
-  if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops)) {
+  if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops) && minuteButton.currentDuration() > holdThreshold) {
     #ifdef DEBUG
       Serial.println("HOUR Held\t");
     #endif
@@ -615,38 +620,38 @@ void loop() {
 
       time_t syncAge = now() - lastGoodSyncTime;
 
-      // display in days
-      if (elapsedDays(syncAge) > 2) {
-        matrix.println(elapsedDays(syncAge));
-        matrix.writeDisplay();
-        delay(1500);
-        matrix.println("DAYS");
+      // display "----" if we have not yet synced (or adjusted)
+      if (lastGoodSyncTime == 0) {
+        matrix.println("----");
       } else {
 
-        // would have been nice if this macro was in TimeLib
-        #define elapsedHours(_time_) ((_time_) / SECS_PER_HOUR)  // this is number of hours since Jan 1 1970
-
-        // display in hours
-        if (elapsedHours(syncAge) > 0) {
-          matrix.writeDigitNum(0, elapsedHours(syncAge) / 10);
-          matrix.writeDigitNum(1, elapsedHours(syncAge) % 10);
-          matrix.writeDigitAscii(3, 'h');
-          matrix.writeDigitAscii(4, 'r');
+        // display in days if over 72 hours old
+        if (elapsedDays(syncAge) > 2) {
+          matrix.println(elapsedDays(syncAge));
+          matrix.writeDisplay();
+          delay(1500);
+          matrix.println("DAYS");
         } else {
 
-          // display "----" if we have not yet synced (or adjusted)
-          if (lastGoodSyncTime == 0) {
-            matrix.println("----");
+          // would have been nice if this macro was in TimeLib
+          #define elapsedHours(_time_) ((_time_) / SECS_PER_HOUR)  // this is number of hours since Jan 1 1970
+
+          // display in hours if over 1 hr hold
+          if (elapsedHours(syncAge) > 0) {
+            matrix.writeDigitNum(0, elapsedHours(syncAge) / 10);
+            matrix.writeDigitNum(1, elapsedHours(syncAge) % 10);
+            matrix.writeDigitAscii(3, 'h');
+            matrix.writeDigitAscii(4, 'r');
           } else {
 
-            // display in seconds because M can't be drawin on 7 segment display
-            // the character S also looks like a 5 which is not ideal
-            matrix.println(syncAge);
-            matrix.writeDisplay();
-            delay(1500);
-            matrix.println(" SEC");
+              // display in seconds because M can't be drawin on 7 segment display
+              // the character S also looks like a 5 which is not ideal
+              matrix.println(syncAge);
+              matrix.writeDisplay();
+              delay(1500);
+              matrix.println(" SEC");
+            }
           }
-        }
       }
 
       matrix.writeDisplay();
@@ -695,6 +700,11 @@ void loop() {
       matrix.writeDigitRaw(2, rawToWrite);
       
       matrix.writeDisplay();
+    #endif
+
+    #ifdef SYNC_LED
+      // Turn onboard led on and off with the enable status
+      digitalWrite(LED_BUILTIN, digitalRead(es100_EN));
     #endif
 
     displayTimeMillis = millis();
@@ -805,9 +815,4 @@ void loop() {
       matrix.clear();
     #endif
   }
-
-  #ifdef SYNC_LED
-    // Turn onboard led on and off with the enable status
-    digitalWrite(LED_BUILTIN, digitalRead(es100_EN));
-  #endif
 }
