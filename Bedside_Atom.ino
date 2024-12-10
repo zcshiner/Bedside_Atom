@@ -40,10 +40,6 @@ const uint8_t clockSwitchPin_DST = 11;
 const uint8_t clockSwitchPin_24HR = 12;
 const unsigned long baudrate = 115200; 
 
-// Useful constants
-const uint16_t SECONDS_IN_HOUR = 3600;
-const uint16_t SECONDS_IN_MINUTE = 60;
-
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
 volatile uint8_t interruptCount = 0;
@@ -66,9 +62,9 @@ uint8_t heldLoops = 0;
 const uint16_t holdThreshold = 800; //ms
 
 // Cycle Times (seconds)
-const unsigned long watchdogTimeout = (unsigned long)SECONDS_IN_HOUR * 2;
-const time_t staleTimeoutShort = (time_t)SECONDS_IN_HOUR * 6;
-const time_t staleTimeoutLong = (time_t)SECONDS_IN_HOUR * 24;
+const unsigned long watchdogTimeout = SECS_PER_HOUR * 2;
+const time_t staleTimeoutShort = SECS_PER_HOUR * 24;
+const time_t staleTimeoutLong = SECS_PER_WEEK;
 
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
@@ -558,7 +554,7 @@ void loop() {
       Serial.println("HOUR Pressed\t");
     #endif
 
-    adjustTime(SECONDS_IN_HOUR);
+    adjustTime(SECS_PER_HOUR);
     lastGoodSyncTime = now();
   }
 
@@ -568,12 +564,12 @@ void loop() {
       Serial.println("MINUTE Pressed\t");
     #endif
 
-    adjustTime(SECONDS_IN_MINUTE);
+    adjustTime(SECS_PER_MIN);
     lastGoodSyncTime = now();
     
     // Undo rollover of minute
     if (minute(lastGoodSyncTime) == 0) {
-      adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+      adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
       lastGoodSyncTime = now();
     }
   }
@@ -584,13 +580,13 @@ void loop() {
       Serial.println("MINUTE Held\t");
     #endif
 
-    adjustTime(SECONDS_IN_MINUTE);
+    adjustTime(SECS_PER_MIN);
     heldLoops++;
     lastGoodSyncTime = now();
     
     // Undo rollover of minute
     if (minute(lastGoodSyncTime) == 0) {
-      adjustTime(SECS_PER_DAY - SECONDS_IN_HOUR);
+      adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
       lastGoodSyncTime = now();
     }
   }
@@ -601,7 +597,7 @@ void loop() {
       Serial.println("HOUR Held\t");
     #endif
 
-    adjustTime(SECONDS_IN_HOUR);
+    adjustTime(SECS_PER_HOUR);
     heldLoops++;
     lastGoodSyncTime = now();
   }
@@ -669,7 +665,7 @@ void loop() {
   //Send updates to the display driver
   if(displayTimeMillis + 50 < millis()){
     localTime = now();
-    localTime += (time_t)UTCoffset * SECONDS_IN_HOUR;
+    localTime += (time_t)UTCoffset * SECS_PER_HOUR;
 
     #ifndef DISABLE_DISPLAY
       useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
