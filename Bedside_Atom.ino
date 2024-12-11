@@ -305,7 +305,7 @@ void loop() {
     es100.enable();
 
     timeoutCounter = 0;
-    while (es100.startRx(false, true) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
+    while (es100.startRx(ANT_1, true) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
         Serial.println("StartRx did not return EXIT_SUCCESS.  Retry in 5s...");
       #endif

@@ -88,6 +88,12 @@ struct ES100Data
   ES100DateTime DateTimeUTC;  /**< struct ES100DateTime */
 };
 
+/** @brief ES100 Antenna Selection */
+enum es100Antenna : bool {
+  ANT_1,
+  ANT_2
+};
+
 
 /*!
 	@brief Class to interface with ES100 Receiver
@@ -114,19 +120,19 @@ class ES100
 
 		/*!
 			@brief  Start a 1-Minute Frame Reception
-			@param  startAntenna   False to start with Antennna 1, true for Antenna 2
+			@param  startAntenna   ANT_1 or ANT_2
 			@param  singleAntenna  True disables the other antenna
 			@return EXIT_SUCCESS or EXIT_FAILURE
 		*/
-		uint8_t    		  startRx(bool startAntenna = false, bool singleAntenna = false);
+		uint8_t    		  startRx(es100Antenna startAntenna = ANT_1, bool singleAntenna = false);
 
 		/*!
 			@brief  Start a Tracking Reception
-			@param  startAntenna   False to start with Antennna 1, true for Antenna 2
+			@param  startAntenna   ANT_1 or ANT_2
 			@param  singleAntenna  True disables the other antenna
 			@return EXIT_SUCCESS or EXIT_FAILURE
 		*/
-		uint8_t    		  startRxTracking(bool startAntenna = false);
+		uint8_t    		  startRxTracking(es100Antenna startAntenna = ANT_1);
 		
 		/*!
 			@brief  Write stop bit and end reception

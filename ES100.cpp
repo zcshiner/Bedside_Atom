@@ -94,7 +94,7 @@ void ES100::disable()
 	digitalWrite(_en_pin, LOW);
 }
 
-uint8_t ES100::startRx(bool startAntenna, bool singleAntenna)
+uint8_t ES100::startRx(es100Antenna startAntenna, bool singleAntenna)
 {
   // False to start with Antennna 1, true for Antenna 2
   uint8_t _dataToWrite;
@@ -102,17 +102,17 @@ uint8_t ES100::startRx(bool startAntenna, bool singleAntenna)
   // no if() needed, equivalent to !startAntenna && !singleAntenna
   _dataToWrite =  0x01; // bit 0 high
 
-  if (startAntenna && !singleAntenna) {
+  if (startAntenna == ANT_2 && !singleAntenna) {
     // start with antenna 2
     _dataToWrite = 0x09; // bit 0 and 3 high
   }
 
-  if (!startAntenna && singleAntenna) {
+  if (startAntenna == ANT_1 && singleAntenna) {
     // use antenna 1 ONLY
     _dataToWrite = 0x05; // bit 0 and 2 high
   }
   
-  if (startAntenna && singleAntenna) {
+  if (startAntenna == ANT_2 && singleAntenna) {
     // use antenna 2 ONLY
     _dataToWrite = 0x03; // bit 0 and 1 high
   }
@@ -141,7 +141,7 @@ uint8_t ES100::startRx(bool startAntenna, bool singleAntenna)
   }
 }
 
-uint8_t ES100::startRxTracking(bool startAntenna)
+uint8_t ES100::startRxTracking(es100Antenna startAntenna)
 {
   #ifdef DEBUG
     Serial.println(F("ES100::startRx Tracking on, Antenna "));
@@ -154,7 +154,7 @@ uint8_t ES100::startRxTracking(bool startAntenna)
 
   // False to start with Antennna 1, true for Antenna 2
   uint8_t _dataToWrite;
-  if(!startAntenna) {
+  if(startAntenna == ANT_1) {
     // Use antenna 1
     _dataToWrite = 0x15; //0b00010101
   } else  {
