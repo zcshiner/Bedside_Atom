@@ -62,7 +62,7 @@ uint8_t heldLoops = 0;
 const uint16_t holdThreshold = 800; //ms
 
 // Cycle Times (seconds)
-const unsigned long watchdogTimeout = SECS_PER_HOUR * 2;
+const unsigned long watchdogTimeout = SECS_PER_HOUR * 5;
 const time_t staleTimeoutShort = SECS_PER_HOUR * 24;
 const time_t staleTimeoutLong = SECS_PER_WEEK;
 
@@ -441,7 +441,7 @@ void loop() {
     lastInterruptCount = interruptCount;
   }
 
-  // Very rarely ES100 and MCU get out of sync with each other.  Let's reset the process every two hours of searching.
+  // Very rarely ES100 and MCU get out of sync with each other.  Let's reset the process every five hours of searching.
   if (timeSyncInProgress && (millis() - syncWatchdog) > (watchdogTimeout * 1000)) {
     
     timeoutCounter = 0;
