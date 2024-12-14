@@ -27,7 +27,7 @@ Bounce2::Button DSTswitch = Bounce2::Button();
 #define DEBUG_CLOCK ///< Print display-related debug info
 //#define DEBUG_CONTINUOUS ///< Don't stop decoding for debug
 //#define DISABLE_DISPLAY ///< Disable I2C display
-#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
+//#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
 
 // Pin Assignments
 const uint8_t es100_IRQ = 7;
@@ -713,7 +713,7 @@ void loop() {
   #endif
 
   #ifdef DEBUG_CLOCK
-    if(debugTimeMillis + 252 < millis()){
+    if(debugTimeMillis + 300 < millis()){
       if(indicatorPM){
         Serial.print("PM ");
       } else{
