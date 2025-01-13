@@ -25,7 +25,8 @@ Bounce2::Button DSTswitch = Bounce2::Button();
 // Compile debug/options
 #define DEBUG ///< Print core functionality debug info
 #define DEBUG_CLOCK ///< Print display-related debug info
-//#define DEBUG_CONTINUOUS ///< Don't stop decoding for debug
+#define DEBUG_CONTINUOUS ///< Don't stop decoding for debug
+#define DISPLAY_SYNC_ON_DRIFT ///< Show "SYNC" only when the drift was large
 //#define DISABLE_DISPLAY ///< Disable I2C display
 //#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
 
@@ -65,6 +66,7 @@ const uint16_t holdThreshold = 800; //ms
 const unsigned long watchdogTimeout = SECS_PER_HOUR * 5;
 const time_t staleTimeoutShort = SECS_PER_HOUR * 24;
 const time_t staleTimeoutLong = SECS_PER_WEEK;
+const int32_t driftThreshold = 59; 
 
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
@@ -120,9 +122,12 @@ inline uint8_t decodeTZswitch() {
   return timeZoneSwitch;
 }
 
-void updateTime(ES100DateTime dt) {
+// Update time library with recieved time.  Return drift between system time and real time.
+int32_t updateTime(ES100DateTime dt) {
+  time_t oldTime = now();
+  
   // Align time update with the atomic offset
-  // Calculated number of ms needed to get to a multiple of 1000ms away from atomicMillis
+  // Calculate number of ms needed to get to a multiple of 1000ms away from atomicMillis
   unsigned long secondOffset = millis() - atomicMillis;
   secondOffset -= 300; // my particular MCU takes about 300ms to think through this
   secondOffset %= 1000;
@@ -135,6 +140,8 @@ void updateTime(ES100DateTime dt) {
 
   // This is also a good place to align blinking seconds indicator to actual seconds
   secondsIndicatorMillis += (atomicMillis % 1000);  //Offset to next whole second
+
+  return oldTime - now();
 }
 
 void calculateUTCoffset(){
@@ -386,7 +393,7 @@ void loop() {
         printES100DateTime(validES100Data.DateTimeUTC);
       #endif
 
-      updateTime(validES100Data.DateTimeUTC);
+      int32_t drift = updateTime(validES100Data.DateTimeUTC);
       lastGoodSyncTime = now();
       lastSyncAttempt = lastGoodSyncTime;
 
@@ -420,14 +427,25 @@ void loop() {
         Serial.println(lastReadStatus0.dstState, BIN);
         Serial.print("status0.tracking = 0b");
         Serial.println(lastReadStatus0.tracking, BIN);
+        Serial.print("Drift: ");
+        Serial.println(drift);
       #endif
 
       #ifndef DISABLE_DISPLAY
-        matrix.clear();
-        matrix.println("SYNC");
-        matrix.writeDisplay();
-        delay(5000);
-        matrix.clear();
+        #ifdef DISPLAY_SYNC_ON_DRIFT
+        // Show "SYNC" only if time has drifted more than 1 minute
+        if (abs(drift) > driftThreshold) {
+        #endif
+        #ifndef DISPLAY_SYNC_ON_DRIFT
+        // always show sync on good update
+        if (true) {
+        #endif
+          matrix.clear();
+          matrix.println("SYNC");
+          matrix.writeDisplay();
+          delay(5000);
+          matrix.clear();
+        }
       #endif
     }
     else if (!lastReadIRQStatus.rxComplete && lastReadIRQStatus.cycleComplete){ // IRQStatus = 0x04
