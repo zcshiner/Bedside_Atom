@@ -128,16 +128,15 @@ int32_t updateTime(ES100DateTime dt) {
   
   // Align time update with the atomic offset
   // Calculate number of ms needed to get to a multiple of 1000ms away from atomicMillis
-  unsigned long secondOffset = millis() - atomicMillis;
-  secondOffset -= 300; // my particular MCU takes about 300ms to think through this
-  secondOffset %= 1000;
-  delay(1000 - secondOffset);
+  long secondOffset = millis() - atomicMillis;
+  delay(1000UL - (unsigned long)(secondOffset % 1000));
 
   // Calculate the whole number of second elapsed since the interrupt was called
-  unsigned long secondAdjust = secondOffset / 1000;
+  int secondAdjust = secondOffset / 1000;
 
   setTime(dt.hour,dt.minute,dt.second + 1 + secondAdjust,dt.day,dt.month,dt.year);
-
+  Serial.print("secondOffset: ");
+  Serial.println(secondOffset);
   // This is also a good place to align blinking seconds indicator to actual seconds
   secondsIndicatorMillis += (atomicMillis % 1000);  //Offset to next whole second
 
