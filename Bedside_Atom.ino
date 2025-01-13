@@ -317,7 +317,10 @@ void loop() {
     lastSyncAttempt = now();
     syncWatchdog = millis();
     timeSyncInProgress = true;
-    triggerTimeSync = false;
+    
+    #ifndef DEBUG_CONTINUOUS
+      triggerTimeSync = false;
+    #endif
 
     /* Important to set the interrupt counter AFTER the startRx because the es100 
     * confirms that the rx has started by triggering the interrupt. 
