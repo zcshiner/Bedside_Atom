@@ -548,7 +548,7 @@ void loop() {
     indicatorSecondsSeparator = !indicatorSecondsSeparator;
 
     // Indicate if time is unset or exceeds short stale timeout
-    if((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort){
+    if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort){
       indicatorAL1 = true;
       // Indicate if time exceeds long stale timeout
       if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutLong) {
@@ -594,32 +594,35 @@ void loop() {
     }
   }
 
-  // Advance minute with a button held longer than than the hold threshold
-  if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
-    #ifdef DEBUG
-      Serial.println("MINUTE Held\t");
-    #endif
+  // Only allow manual time changes if last sync is stale or never
+  if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort) {
+    // Advance minute with a button held longer than than the hold threshold
+    if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
+      #ifdef DEBUG
+        Serial.println("MINUTE Held\t");
+      #endif
 
-    adjustTime(SECS_PER_MIN);
-    heldLoops++;
-    lastGoodSyncTime = now();
+      adjustTime(SECS_PER_MIN);
+      heldLoops++;
+      lastGoodSyncTime = now();
+      
+      // Undo rollover of minute
+      if (minute(lastGoodSyncTime) == 0) {
+        adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
+        lastGoodSyncTime = now();
+      }
+    }
     
-    // Undo rollover of minute
-    if (minute(lastGoodSyncTime) == 0) {
-      adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
+    // Advance hour with a button held longer than than the hold threshold
+    if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops) && minuteButton.currentDuration() > holdThreshold) {
+      #ifdef DEBUG
+        Serial.println("HOUR Held\t");
+      #endif
+
+      adjustTime(SECS_PER_HOUR);
+      heldLoops++;
       lastGoodSyncTime = now();
     }
-  }
-  
-  // Advance hour with a button held longer than than the hold threshold
-  if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops) && minuteButton.currentDuration() > holdThreshold) {
-    #ifdef DEBUG
-      Serial.println("HOUR Held\t");
-    #endif
-
-    adjustTime(SECS_PER_HOUR);
-    heldLoops++;
-    lastGoodSyncTime = now();
   }
 
   // Show sync status if both adjust buttons are held
