@@ -89,6 +89,12 @@ int8_t timezone = 0;
 int8_t UTCoffset = 0;
 time_t localTime = 0;
 
+// fixed day and night time brightness settings
+const uint8_t nightlightStart = 9+12; //9pm
+const uint8_t nightlightEnd = 7; // 7am
+const uint8_t dayBright = 15;  // 0 to 15
+const uint8_t nightBright = 5;  // 0 to 15
+
 void atomic() {
   // Called procedure when we receive an interrupt from the ES100
   // Store milis of when the interrupt happened.  This is the second (time) boundary.
@@ -183,7 +189,7 @@ void setup() {
   #ifndef DISABLE_DISPLAY
     // Begin display on i2c address 0x70
     matrix.begin(0x70);
-    matrix.setBrightness(15); // 0 to 15
+    matrix.setBrightness(dayBright);
 
     // Turn on all addressable digits
     for (uint8_t i = 0; i < 5; i++) {
@@ -487,6 +493,7 @@ void loop() {
   //   - Receive the current time on an schedule
   //   - Evaluate if DST is changing
   //   - Set stale indicators
+  //   - Set display brightness on a schedule
   if (syncCheckIntervalMillis + 10000 < millis()) {
 
     // Are we currently recieving the time?
@@ -535,6 +542,16 @@ void loop() {
 
     if(timeStatus() != timeNotSet){
       calculateUTCoffset();
+
+      // if we are in day mode (between end and start)
+      if (nightlightEnd <= hour(localTime) && hour(localTime) < nightlightStart) { // local time calculated in the display update loop
+        matrix.setBrightness(dayBright);
+
+      // we are in night mode (between start and end)
+      } else {
+        matrix.setBrightness(nightBright);
+      }
+
     }
 
     syncCheckIntervalMillis = millis();
