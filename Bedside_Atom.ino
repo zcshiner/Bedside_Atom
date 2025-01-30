@@ -1,9 +1,9 @@
 /*!
  * @file Bedside_Atom.ino
- * Bedside Atom V1.2
+ * Bedside Atom V2
  * A WWVB syncronized tabletop clock
  *
- * Written by Zach Shiner, 2024
+ * Written by Zach Shiner, 2025
  * 
  * MIT License
  * See README.md and LICENSE.md for more information
