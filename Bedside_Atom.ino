@@ -585,34 +585,35 @@ void loop() {
   minuteButton.update();
   DSTswitch.update();
 
-  // Advance hour with a single button press less than the hold threshold
-  if (hourButton.released() && hourButton.previousDuration() < (holdThreshold / 2)){
-    #ifdef DEBUG
-      Serial.println("HOUR Pressed\t");
-    #endif
-
-    adjustTime(SECS_PER_HOUR);
-    lastGoodSyncTime = now();
-  }
-
-  // Advance minute with a single button press less than the hold threshold
-  if (minuteButton.released() && minuteButton.previousDuration() < (holdThreshold / 2)){
-    #ifdef DEBUG
-      Serial.println("MINUTE Pressed\t");
-    #endif
-
-    adjustTime(SECS_PER_MIN);
-    lastGoodSyncTime = now();
-    
-    // Undo rollover of minute
-    if (minute(lastGoodSyncTime) == 0) {
-      adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
-      lastGoodSyncTime = now();
-    }
-  }
-
   // Only allow manual time changes if last sync is stale or never
   if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort) {
+
+    // Advance hour with a single button press less than the hold threshold
+    if (hourButton.released() && hourButton.previousDuration() < (holdThreshold / 2)){
+      #ifdef DEBUG
+        Serial.println("HOUR Pressed\t");
+      #endif
+
+      adjustTime(SECS_PER_HOUR);
+      lastGoodSyncTime = now();
+    }
+
+    // Advance minute with a single button press less than the hold threshold
+    if (minuteButton.released() && minuteButton.previousDuration() < (holdThreshold / 2)){
+      #ifdef DEBUG
+        Serial.println("MINUTE Pressed\t");
+      #endif
+
+      adjustTime(SECS_PER_MIN);
+      lastGoodSyncTime = now();
+      
+      // Undo rollover of minute
+      if (minute(lastGoodSyncTime) == 0) {
+        adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
+        lastGoodSyncTime = now();
+      }
+    }
+
     // Advance minute with a button held longer than than the hold threshold
     if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
       #ifdef DEBUG
