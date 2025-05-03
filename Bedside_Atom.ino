@@ -14,6 +14,7 @@
 #include <TimeLib.h>              // https://github.com/PaulStoffregen/Time
 #include "Adafruit_LEDBackpack.h" // https://github.com/adafruit/Adafruit_LED_Backpack
 #include <Bounce2.h>              // https://github.com/thomasfredericks/Bounce2
+#include <toneAC.h>               // https://bitbucket.org/teckel12/arduino-toneac/wiki/Home
 
 // Initialize library objects
 ES100 es100;
@@ -29,6 +30,8 @@ Bounce2::Button DSTswitch = Bounce2::Button();
 #define DISPLAY_SYNC_ON_DRIFT ///< Show "SYNC" only when the drift was large
 //#define DISABLE_DISPLAY ///< Disable I2C display
 //#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
+//#define DISABLE_PIEZO ///< Disable piezo buzzer alerts on system events
+#define DISABLE_SYNC_PIEZO ///< Disable piezo buzzer when a good sync happens (annoying)
 
 // Pin Assignments
 const uint8_t es100_IRQ = 7;
@@ -40,6 +43,7 @@ const uint8_t clockSwitchPin_TZ1 = 8;
 const uint8_t clockSwitchPin_DST = 6;
 // const uint8_t clockSwitchPin_24HR = ;
 const unsigned long baudrate = 115200;
+const uint16_t alertTone_kHz = 4600;
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -183,6 +187,15 @@ void calculateUTCoffset(){
   }
 }
 
+void alertToneSingle(bool _background = true) {
+  toneAC(alertTone_kHz, 10, 50, _background);
+}
+
+void alertToneDual(bool _background = true) {
+  toneAC(alertTone_kHz, 10, 50, false);
+  toneAC(alertTone_kHz - 1000, 10, 50, _background);
+}
+
 void setup() {
   Wire.begin();
 
@@ -202,7 +215,8 @@ void setup() {
     for (uint8_t i = 0; i < 5; i++) {
       matrix.writeDigitRaw(i, 0b11111111);
     }
-    matrix.writeDisplay(); 
+    matrix.writeDisplay();
+    alertToneSingle();
     delay(3000);
 
     #if defined(DEBUG) || defined(DEBUG_CLOCK)
@@ -261,9 +275,10 @@ void setup() {
       delay(animateDelay/2);
       matrix.clear();
     }
-    delay(animateDelay * 5);
     matrix.writeDisplay();
   #endif
+
+  alertToneDual(false);
 
   #if defined(DEBUG) || defined(DEBUG_CLOCK)
     while(!Serial && millis() < 5000) {
@@ -404,6 +419,18 @@ void loop() {
         // Serial Print out recieved time
         printES100DateTime(validES100Data.DateTimeUTC);
       #endif
+
+      if(timeStatus() == timeNotSet){
+        // Always chirp at the first time sync
+        alertToneDual();
+      } else {
+        // Chirp at every time sync
+        #ifndef DISABLE_PIEZO
+          #ifndef DISABLE_SYNC_PIEZO
+            alertToneDual();
+          #endif
+        #endif
+      }
 
       int32_t drift = updateTime(validES100Data.DateTimeUTC);
       lastGoodSyncTime = now();
@@ -601,6 +628,10 @@ void loop() {
         Serial.println("HOUR Pressed\t");
       #endif
 
+      #ifndef DISABLE_PIEZO
+        alertToneSingle();
+      #endif
+
       adjustTime(SECS_PER_HOUR);
       lastGoodSyncTime = now();
     }
@@ -609,6 +640,10 @@ void loop() {
     if (minuteButton.released() && minuteButton.previousDuration() < (holdThreshold / 2)){
       #ifdef DEBUG
         Serial.println("MINUTE Pressed\t");
+      #endif
+
+      #ifndef DISABLE_PIEZO
+        alertToneSingle();
       #endif
 
       adjustTime(SECS_PER_MIN);
@@ -625,6 +660,12 @@ void loop() {
     if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
       #ifdef DEBUG
         Serial.println("MINUTE Held\t");
+      #endif
+
+      #ifndef DISABLE_PIEZO
+        if (heldLoops < 1){
+          alertToneSingle();
+        }
       #endif
 
       adjustTime(SECS_PER_MIN);
@@ -644,6 +685,12 @@ void loop() {
         Serial.println("HOUR Held\t");
       #endif
 
+      #ifndef DISABLE_PIEZO
+        if (heldLoops < 1){
+          alertToneSingle();
+        }
+      #endif
+
       adjustTime(SECS_PER_HOUR);
       heldLoops++;
       lastGoodSyncTime = now();
@@ -652,6 +699,10 @@ void loop() {
 
   // Show sync status if both adjust buttons are held
   if (minuteButton.isPressed() && hourButton.isPressed() && minuteButton.currentDuration() > 1000 && hourButton.currentDuration() > 1000 && heldLoops == 0) {
+    #ifndef DISABLE_PIEZO
+      alertToneDual(false);
+    #endif
+    
     #ifndef DISABLE_DISPLAY
       matrix.clear();
       matrix.println("LASt");
@@ -822,6 +873,10 @@ void loop() {
       Serial.println(currentTZswitch);
     #endif
 
+    #ifndef DISABLE_PIEZO
+      alertToneSingle();
+    #endif
+
     #ifndef DISABLE_DISPLAY
       if(timeStatus() == timeNotSet) {
         matrix.clear();
@@ -850,6 +905,10 @@ void loop() {
     if(timeStatus() != timeNotSet) {
       calculateUTCoffset();
     }
+
+    #ifndef DISABLE_PIEZO
+      alertToneSingle();
+    #endif
 
     #ifndef DISABLE_DISPLAY
       matrix.clear();
