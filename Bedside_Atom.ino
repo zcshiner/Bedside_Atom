@@ -32,14 +32,14 @@ Bounce2::Button DSTswitch = Bounce2::Button();
 
 // Pin Assignments
 const uint8_t es100_IRQ = 7;
-const uint8_t es100_EN = 5; // LED_BUILTIN; // 13 on UNO
-const uint8_t clockButtonPin_Hour = 10;
-const uint8_t clockButtonPin_Minute = 9;
-const uint8_t clockSwitchPin_TZ0 = A2;
-const uint8_t clockSwitchPin_TZ1 = A1;
-const uint8_t clockSwitchPin_DST = 11;
-const uint8_t clockSwitchPin_24HR = 12;
-const unsigned long baudrate = 115200; 
+const uint8_t es100_EN = 0;
+const uint8_t clockButtonPin_Hour = 12;
+const uint8_t clockButtonPin_Minute = 4;
+const uint8_t clockSwitchPin_TZ0 = 5;
+const uint8_t clockSwitchPin_TZ1 = 8;
+const uint8_t clockSwitchPin_DST = 6;
+// const uint8_t clockSwitchPin_24HR = ;
+const unsigned long baudrate = 115200;
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -186,6 +186,13 @@ void calculateUTCoffset(){
 void setup() {
   Wire.begin();
 
+  for (uint8_t i = 0; i < 4; i++) {
+    digitalWrite(LED_BUILTIN, 1);
+    delay(200);
+    digitalWrite(LED_BUILTIN, 0);
+    delay(200);
+  }
+
   #ifndef DISABLE_DISPLAY
     // Begin display on i2c address 0x70
     matrix.begin(0x70);
@@ -275,7 +282,7 @@ void setup() {
   minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
   DSTswitch.attach(clockSwitchPin_DST, INPUT_PULLUP);
 
-  pinMode(clockSwitchPin_24HR, INPUT_PULLUP);
+  // pinMode(clockSwitchPin_24HR, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ0, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ1, INPUT_PULLUP);
 
@@ -709,7 +716,8 @@ void loop() {
     localTime += (time_t)UTCoffset * SECS_PER_HOUR;
 
     #ifndef DISABLE_DISPLAY
-      useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
+      // useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
+      useTwentyFourHourTime = false; // I mapped this pin to TX led indicator by accident.  Disable for now.
 
       if(useTwentyFourHourTime){
         matrix.writeDigitNum(0, hour(localTime) / 10);
