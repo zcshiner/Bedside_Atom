@@ -15,13 +15,7 @@
 #include "Adafruit_LEDBackpack.h" // https://github.com/adafruit/Adafruit_LED_Backpack
 #include <Bounce2.h>              // https://github.com/thomasfredericks/Bounce2
 #include <toneAC.h>               // https://bitbucket.org/teckel12/arduino-toneac/wiki/Home
-
-// Initialize library objects
-ES100 es100;
-Adafruit_7segment matrix = Adafruit_7segment();
-Bounce2::Button hourButton = Bounce2::Button();
-Bounce2::Button minuteButton = Bounce2::Button();
-Bounce2::Button DSTswitch = Bounce2::Button();
+#include "RTClib.h"               // https://github.com/adafruit/RTClib
 
 // Compile debug/options
 #define DEBUG ///< Print core functionality debug info
@@ -32,6 +26,17 @@ Bounce2::Button DSTswitch = Bounce2::Button();
 //#define SYNC_LED ///< Keep builtin LED in sync with es100_EN
 //#define DISABLE_PIEZO ///< Disable piezo buzzer alerts on system events
 #define DISABLE_SYNC_PIEZO ///< Disable piezo buzzer when a good sync happens (annoying)
+#define USE_RTC ///< Is an RTC onboard and do we want to use it?
+
+// Initialize library objects
+ES100 es100;
+Adafruit_7segment matrix = Adafruit_7segment();
+Bounce2::Button hourButton = Bounce2::Button();
+Bounce2::Button minuteButton = Bounce2::Button();
+Bounce2::Button DSTswitch = Bounce2::Button();
+#ifdef USE_RTC
+  RTC_DS1307 RTC;
+#endif
 
 // Pin Assignments
 const uint8_t es100_IRQ = 7;
@@ -41,7 +46,6 @@ const uint8_t clockButtonPin_Minute = 4;
 const uint8_t clockSwitchPin_TZ0 = 5;
 const uint8_t clockSwitchPin_TZ1 = 8;
 const uint8_t clockSwitchPin_DST = 6;
-// const uint8_t clockSwitchPin_24HR = ;
 const unsigned long baudrate = 115200;
 const uint16_t alertTone_kHz = 4600;
 
@@ -52,6 +56,9 @@ uint8_t lastInterruptCount = 0;
 time_t lastGoodSyncTime = 0;
 time_t lastSyncAttempt = 0;
 unsigned long syncWatchdog = 0;
+#ifdef USE_RTC
+  bool rtcDetected = false;
+#endif 
 
 // Timestamps for faux multitasking
 unsigned long secondsIndicatorMillis = 0;
@@ -132,7 +139,57 @@ inline uint8_t decodeTZswitch() {
   return timeZoneSwitch;
 }
 
-// Update time library with recieved time.  Return drift between system time and real time.
+#ifdef USE_RTC
+  time_t getNowRTC () {
+    if(RTC.isrunning()) {
+      time_t _now = RTC.now().unixtime();
+
+      #ifdef DEBUG
+        Serial.print("Current RTC time is: ");
+        Serial.println(_now);
+      #endif
+
+      return _now;
+    }
+    else {
+      #ifdef DEBUG
+        Serial.println("RTC not yet set.");
+      #endif
+
+      return 0;
+    }
+  }
+  
+  // Store the name of getNowRTC to use later
+  const getExternalTime syncProviderFunction = getNowRTC;
+#endif
+
+void adjustSystemTime (time_t _adjust) {
+  time_t _new = now() + _adjust;
+  
+  #ifdef DEBUG
+    Serial.print("Time adjustment: ");
+    Serial.println(_adjust);
+    Serial.println("Adjusting Time Library to: ");
+    Serial.println(_new);
+  #endif
+
+  setSyncProvider(0);  // disable sync provider
+  adjustTime(_adjust);
+
+  #ifdef USE_RTC
+    #ifdef DEBUG 
+      Serial.println("Adjusting RTC to: ");
+      Serial.println(_new);
+    #endif
+
+    RTC.adjust(DateTime(_new));
+    setSyncProvider(syncProviderFunction); // restore sync provider
+
+  #endif
+}
+
+// Update time library with recieved time.  Return drift between system time and real time in seconds
 int32_t updateTime(ES100DateTime dt) {
   time_t oldTime = now();
   
@@ -144,13 +201,27 @@ int32_t updateTime(ES100DateTime dt) {
   // Calculate the whole number of second elapsed since the interrupt was called
   int secondAdjust = secondOffset / 1000;
 
+  setSyncProvider(0);  // disable sync provider
   setTime(dt.hour,dt.minute,dt.second + 1 + secondAdjust,dt.day,dt.month,dt.year);
+
   Serial.print("secondOffset: ");
   Serial.println(secondOffset);
+
   // This is also a good place to align blinking seconds indicator to actual seconds
   secondsIndicatorMillis += (atomicMillis % 1000);  //Offset to next whole second
 
-  return oldTime - now();
+  time_t _now = now();
+  #ifdef USE_RTC
+    #ifdef DEBUG
+      Serial.print("Set RTC to: ");
+      Serial.println(_now);
+    #endif
+
+    RTC.adjust(DateTime(_now));
+    setSyncProvider(syncProviderFunction); // restore sync provider
+  #endif
+
+  return oldTime - _now;
 }
 
 void calculateUTCoffset(){
@@ -297,7 +368,6 @@ void setup() {
   minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
   DSTswitch.attach(clockSwitchPin_DST, INPUT_PULLUP);
 
-  // pinMode(clockSwitchPin_24HR, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ0, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ1, INPUT_PULLUP);
 
@@ -326,6 +396,33 @@ void setup() {
     lastInterruptCount = 0;
     interruptCount = 0;
   #endif
+
+  #ifdef USE_RTC
+    // Attempt to begin RTC - returns false if not present
+    rtcDetected = RTC.begin();
+
+    #ifdef DEBUG
+      if (rtcDetected) {
+        Serial.println("RTC Detected.  Using RTC as Sync Provider.");
+      } else {
+        Serial.println("RTC not present.");
+      }
+    #endif
+
+    // Display out the RTC status
+    #ifndef DISABLE_DISPLAY
+      matrix.clear();
+      matrix.println("rtc ");
+      matrix.writeDigitNum(4, rtcDetected);
+      matrix.writeDisplay();
+      delay(1000);
+      matrix.clear();
+    #endif
+  #endif
+
+  // Start with time set to Y2k
+  adjustTime(SECS_YR_2000);
+  setSyncInterval(300); // seconds
 
   lastTZswitch = decodeTZswitch();
 }
@@ -420,7 +517,7 @@ void loop() {
         printES100DateTime(validES100Data.DateTimeUTC);
       #endif
 
-      if(timeStatus() == timeNotSet){
+      if(lastGoodSyncTime == 0){
         // Always chirp at the first time sync
         alertToneDual();
       } else {
@@ -535,7 +632,7 @@ void loop() {
 
       // If we aren't already syncing (outer loop)
       // and the time isn't set, request a reception
-      if(timeStatus() == timeNotSet){
+      if(lastGoodSyncTime == 0){
         triggerTimeSync = true;
         #ifdef DEBUG
           Serial.println("Time not set, requesting sync");
@@ -574,7 +671,7 @@ void loop() {
       Serial.print(".");
     #endif
 
-    if(timeStatus() != timeNotSet){
+    if(lastGoodSyncTime != 0){
       calculateUTCoffset();
 
       // if we are in day mode (between end and start)
@@ -599,10 +696,10 @@ void loop() {
     indicatorSecondsSeparator = !indicatorSecondsSeparator;
 
     // Indicate if time is unset or exceeds short stale timeout
-    if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort){
+    if ((lastGoodSyncTime == 0) || (now() - lastGoodSyncTime) > staleTimeoutShort){
       indicatorAL1 = true;
       // Indicate if time exceeds long stale timeout
-      if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutLong) {
+      if ((lastGoodSyncTime == 0) || (now() - lastGoodSyncTime) > staleTimeoutLong) {
         indicatorAL2 = true;
       }
     } 
@@ -620,7 +717,7 @@ void loop() {
   DSTswitch.update();
 
   // Only allow manual time changes if last sync is stale or never
-  if ((timeStatus() == timeNotSet) || (now() - lastGoodSyncTime) > staleTimeoutShort) {
+  if (lastGoodSyncTime == 0 || (now() - lastGoodSyncTime) > staleTimeoutShort) {
 
     // Advance hour with a single button press less than the hold threshold
     if (hourButton.released() && hourButton.previousDuration() < (holdThreshold / 2)){
@@ -632,8 +729,8 @@ void loop() {
         alertToneSingle();
       #endif
 
-      adjustTime(SECS_PER_HOUR);
-      lastGoodSyncTime = now();
+      adjustSystemTime(SECS_PER_HOUR);
+      lastSyncAttempt = now();
     }
 
     // Advance minute with a single button press less than the hold threshold
@@ -646,13 +743,13 @@ void loop() {
         alertToneSingle();
       #endif
 
-      adjustTime(SECS_PER_MIN);
-      lastGoodSyncTime = now();
+      adjustSystemTime(SECS_PER_MIN);
+      lastSyncAttempt = now();
       
       // Undo rollover of minute
-      if (minute(lastGoodSyncTime) == 0) {
-        adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
-        lastGoodSyncTime = now();
+      if (minute(lastSyncAttempt) == 0) {
+        adjustSystemTime(SECS_PER_DAY - SECS_PER_HOUR);
+        lastSyncAttempt = now();
       }
     }
 
@@ -668,14 +765,14 @@ void loop() {
         }
       #endif
 
-      adjustTime(SECS_PER_MIN);
+      adjustSystemTime(SECS_PER_MIN);
       heldLoops++;
-      lastGoodSyncTime = now();
+      lastSyncAttempt = now();
       
       // Undo rollover of minute
-      if (minute(lastGoodSyncTime) == 0) {
-        adjustTime(SECS_PER_DAY - SECS_PER_HOUR);
-        lastGoodSyncTime = now();
+      if (minute(lastSyncAttempt) == 0) {
+        adjustSystemTime(SECS_PER_DAY - SECS_PER_HOUR);
+        lastSyncAttempt = now();
       }
     }
     
@@ -691,9 +788,9 @@ void loop() {
         }
       #endif
 
-      adjustTime(SECS_PER_HOUR);
+      adjustSystemTime(SECS_PER_HOUR);
       heldLoops++;
-      lastGoodSyncTime = now();
+      lastSyncAttempt = now();
     }
   }
 
@@ -717,7 +814,10 @@ void loop() {
 
       // display "----" if we have not yet synced (or adjusted)
       if (lastGoodSyncTime == 0) {
-        matrix.println("----");
+        matrix.println("----"); 
+        #ifdef DEBUG
+            Serial.println("Not yet synced...");
+        #endif
       } else {
 
         // display in days if over 72 hours old
@@ -855,7 +955,20 @@ void loop() {
         Serial.print(0);
       }
       Serial.print("ms\tTZ: ");
-      Serial.println(decodeTZswitch());
+      Serial.print(decodeTZswitch());
+
+      Serial.print("\tTime Status :");
+      switch (timeStatus()) {
+        case timeNotSet:
+          Serial.println("timeNotSet");
+          break;
+        case timeNeedsSync:
+          Serial.println("timeNeedsSync");
+          break;
+        case timeSet:
+          Serial.println("timeSet");
+          break;
+      }
 
       debugTimeMillis = millis();
     }
@@ -878,7 +991,7 @@ void loop() {
     #endif
 
     #ifndef DISABLE_DISPLAY
-      if(timeStatus() == timeNotSet) {
+      if(lastGoodSyncTime == 0) {
         matrix.clear();
         matrix.println(" -");
         int8_t tzSwitchState = 5 + currentTZswitch;
@@ -889,7 +1002,7 @@ void loop() {
       }
     #endif
 
-    if(timeStatus() != timeNotSet) {
+    if(lastGoodSyncTime != 0) {
       calculateUTCoffset();
     }
 
@@ -902,7 +1015,7 @@ void loop() {
       Serial.println("DST Switch Changed!");
     #endif
 
-    if(timeStatus() != timeNotSet) {
+    if(lastGoodSyncTime != 0) {
       calculateUTCoffset();
     }
 
