@@ -178,14 +178,15 @@ void adjustSystemTime (time_t _adjust) {
   adjustTime(_adjust);
 
   #ifdef USE_RTC
-    #ifdef DEBUG 
-      Serial.println("Adjusting RTC to: ");
-      Serial.println(_new);
-    #endif
+    if (rtcDetected) {
+      #ifdef DEBUG 
+        Serial.println("Adjusting RTC to: ");
+        Serial.println(_new);
+      #endif
 
-    RTC.adjust(DateTime(_new));
-    setSyncProvider(syncProviderFunction); // restore sync provider
-
+      RTC.adjust(DateTime(_new));
+      setSyncProvider(syncProviderFunction); // restore sync provider
+    }
   #endif
 }
 
@@ -212,13 +213,15 @@ int32_t updateTime(ES100DateTime dt) {
 
   time_t _now = now();
   #ifdef USE_RTC
-    #ifdef DEBUG
-      Serial.print("Set RTC to: ");
-      Serial.println(_now);
-    #endif
+    if (rtcDetected) {
+      #ifdef DEBUG
+        Serial.print("Set RTC to: ");
+        Serial.println(_now);
+      #endif
 
-    RTC.adjust(DateTime(_now));
-    setSyncProvider(syncProviderFunction); // restore sync provider
+      RTC.adjust(DateTime(_now));
+      setSyncProvider(syncProviderFunction); // restore sync provider
+    }
   #endif
 
   return oldTime - _now;
@@ -403,9 +406,9 @@ void setup() {
 
     #ifdef DEBUG
       if (rtcDetected) {
-        Serial.println("RTC Detected.  Using RTC as Sync Provider.");
+        Serial.println("RTC Detected");
       } else {
-        Serial.println("RTC not present.");
+        Serial.println("RTC not present");
       }
     #endif
 
@@ -418,6 +421,10 @@ void setup() {
       delay(1000);
       matrix.clear();
     #endif
+  #endif
+
+  #ifndef USE_RTC
+    Serial.println("RTC support disabled");
   #endif
 
   // Start with time set to Y2k
