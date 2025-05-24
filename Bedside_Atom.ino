@@ -269,16 +269,16 @@ void calculateUTCoffset(){
   }
 }
 
-void alertToneSingle(bool _background = true) {
+void alertToneSingle(bool _background = false) {
   toneAC(alertTone_kHz, 10, 50, _background);
 }
 
-void alertToneDual(bool _background = true) {
+void alertToneDualDown(bool _background = false) {
   toneAC(alertTone_kHz, 10, 50, false);
   toneAC(alertTone_kHz - 1000, 10, 50, _background);
 }
 
-void alertToneDualUp(bool _background = true) {
+void alertToneDualUp(bool _background = false) {
   toneAC(alertTone_kHz - 1000, 10, 50, false);
   toneAC(alertTone_kHz, 10, 50, _background);
 }
@@ -364,8 +364,6 @@ void setup() {
     }
     matrix.writeDisplay();
   #endif
-
-  alertToneDual(false);
 
   #if defined(DEBUG) || defined(DEBUG_CLOCK)
     while(!Serial && millis() < 5000) {
@@ -461,6 +459,8 @@ void setup() {
   }
 
   lastTZswitch = decodeTZswitch();
+
+  alertToneDualDown();
 }
 
 void loop() {
@@ -555,12 +555,12 @@ void loop() {
 
       if(lastGoodSyncTime == 0){
         // Always chirp at the first time sync
-        alertToneDual();
+        alertToneDualDown(true);
       } else {
         // Chirp at every time sync
         #ifndef DISABLE_PIEZO
           #ifndef DISABLE_SYNC_PIEZO
-            alertToneDual();
+            alertToneDual(true);
           #endif
         #endif
       }
@@ -834,7 +834,7 @@ void loop() {
   // Show sync status if both adjust buttons are held
   if (minuteButton.isPressed() && hourButton.isPressed() && minuteButton.currentDuration() > 1000 && hourButton.currentDuration() > 1000 && heldLoops == 0) {
     #ifndef DISABLE_PIEZO
-      alertToneDual(false);
+      alertToneDualDown();
     #endif
     
     #ifndef DISABLE_DISPLAY
@@ -904,9 +904,9 @@ void loop() {
 
     #ifndef DISABLE_PIEZO
       if (useTwentyFourHourTime) {
-        alertToneDual(false);
+        alertToneDualDown();
       } else {
-        alertToneDualUp(false);
+        alertToneDualUp();
       }
     #endif
 
