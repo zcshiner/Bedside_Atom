@@ -34,20 +34,24 @@ Adafruit_7segment matrix = Adafruit_7segment();
 Bounce2::Button hourButton = Bounce2::Button();
 Bounce2::Button minuteButton = Bounce2::Button();
 Bounce2::Button DSTswitch = Bounce2::Button();
+Bounce2::Button button_24hour = Bounce2::Button();
 #ifdef USE_RTC
   RTC_DS1307 RTC;
 #endif
 
 // Pin Assignments
-const uint8_t es100_IRQ = 7;
-const uint8_t es100_EN = 0;
-const uint8_t clockButtonPin_Hour = 12;
-const uint8_t clockButtonPin_Minute = 4;
-const uint8_t clockSwitchPin_TZ0 = 5;
-const uint8_t clockSwitchPin_TZ1 = 8;
-const uint8_t clockSwitchPin_DST = 6;
+const uint8_t es100_IRQ = 7; // PE6
+const uint8_t es100_EN = 0;  // PD2
+const uint8_t clockButtonPin_Hour = 12;    // PD6
+const uint8_t clockButtonPin_Minute = 4;   // PD4
+const uint8_t clockSwitchPin_TZ0 = 5;      // PC6
+const uint8_t clockSwitchPin_TZ1 = 8;      // PB4
+const uint8_t clockSwitchPin_DST = 6;      // PD7
+const uint8_t clockButtonPin_24HR = A1;    // PF6
+const uint8_t clockButtonPin_ANT_SEL = A2; // PF5
 const unsigned long baudrate = 115200;
-const uint16_t alertTone_kHz = 4600;
+const uint16_t alertTone_kHz = 4600; // small buzzer
+// const uint16_t alertTone_kHz = 3900; // big buzzer
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -270,6 +274,11 @@ void alertToneDual(bool _background = true) {
   toneAC(alertTone_kHz - 1000, 10, 50, _background);
 }
 
+void alertToneDualUp(bool _background = true) {
+  toneAC(alertTone_kHz - 1000, 10, 50, false);
+  toneAC(alertTone_kHz, 10, 50, _background);
+}
+
 void setup() {
   Wire.begin();
 
@@ -370,6 +379,7 @@ void setup() {
   hourButton.attach(clockButtonPin_Hour, INPUT_PULLUP);
   minuteButton.attach(clockButtonPin_Minute, INPUT_PULLUP);
   DSTswitch.attach(clockSwitchPin_DST, INPUT_PULLUP);
+  button_24hour.attach(clockButtonPin_24HR, INPUT_PULLUP);
 
   pinMode(clockSwitchPin_TZ0, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ1, INPUT_PULLUP);
@@ -377,10 +387,12 @@ void setup() {
   hourButton.interval(debounceInterval);
   minuteButton.interval(debounceInterval);
   DSTswitch.interval(debounceInterval);
+  button_24hour.interval(debounceInterval);
 
   hourButton.setPressedState(LOW);
   minuteButton.setPressedState(LOW);
   DSTswitch.setPressedState(LOW);
+  button_24hour.setPressedState(LOW);
   
   #ifdef DEBUG
     delay(1000);
@@ -722,6 +734,7 @@ void loop() {
   hourButton.update();
   minuteButton.update();
   DSTswitch.update();
+  button_24hour.update();
 
   // Only allow manual time changes if last sync is stale or never
   if (lastGoodSyncTime == 0 || (now() - lastGoodSyncTime) > staleTimeoutShort) {
@@ -868,14 +881,29 @@ void loop() {
     heldLoops = 0;
   }
 
+  // Toggle 24hr mode if button is pressed
+  if (button_24hour.pressed()) {
+    useTwentyFourHourTime = !useTwentyFourHourTime;
+
+    #ifndef DISABLE_PIEZO
+      if (useTwentyFourHourTime) {
+        alertToneDual(false);
+      } else {
+        alertToneDualUp(false);
+      }
+    #endif
+
+    #ifdef DEBUG
+        Serial.println("24HR Pressed\t");
+    #endif
+  }
+
   //Send updates to the display driver
   if(displayTimeMillis + 50 < millis()){
     localTime = now();
     localTime += (time_t)UTCoffset * SECS_PER_HOUR;
 
     #ifndef DISABLE_DISPLAY
-      // useTwentyFourHourTime = !digitalRead(clockSwitchPin_24HR);
-      useTwentyFourHourTime = false; // I mapped this pin to TX led indicator by accident.  Disable for now.
 
       if(useTwentyFourHourTime){
         matrix.writeDigitNum(0, hour(localTime) / 10);
