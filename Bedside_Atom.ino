@@ -11,6 +11,7 @@
 
 #include "ES100.h"
 #include <Wire.h>
+#include <EEPROM.h>
 #include <TimeLib.h>              // https://github.com/PaulStoffregen/Time
 #include "Adafruit_LEDBackpack.h" // https://github.com/adafruit/Adafruit_LED_Backpack
 #include <Bounce2.h>              // https://github.com/thomasfredericks/Bounce2
@@ -49,9 +50,12 @@ const uint8_t clockSwitchPin_TZ1 = 8;      // PB4
 const uint8_t clockSwitchPin_DST = 6;      // PD7
 const uint8_t clockButtonPin_24HR = A1;    // PF6
 const uint8_t clockButtonPin_ANT_SEL = A2; // PF5
+
+// Constant data
 const unsigned long baudrate = 115200;
 const uint16_t alertTone_kHz = 4600; // small buzzer
 // const uint16_t alertTone_kHz = 3900; // big buzzer
+const unsigned int eepromAddress_useTwentyFourHourTime = 32; // arbitrary
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -442,6 +446,19 @@ void setup() {
   // Start with time set to Y2k
   adjustTime(SECS_YR_2000);
   setSyncInterval(300); // seconds
+
+  // EEPROM state is unknown at startup.  Validate existing data before moving on.
+  uint8_t unknownEEPROMdata = EEPROM.read(eepromAddress_useTwentyFourHourTime);
+
+  if (unknownEEPROMdata == 1) {
+    useTwentyFourHourTime = true;
+  }
+  else if (unknownEEPROMdata == 0) {
+    useTwentyFourHourTime = false;
+  }
+  else {
+    EEPROM.write(eepromAddress_useTwentyFourHourTime, useTwentyFourHourTime);
+  }
 
   lastTZswitch = decodeTZswitch();
 }
@@ -896,6 +913,8 @@ void loop() {
     #ifdef DEBUG
         Serial.println("24HR Pressed\t");
     #endif
+
+    EEPROM.update(eepromAddress_useTwentyFourHourTime, useTwentyFourHourTime);
   }
 
   //Send updates to the display driver
