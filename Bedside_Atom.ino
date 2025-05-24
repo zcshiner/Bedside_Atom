@@ -369,7 +369,7 @@ void setup() {
     while(!Serial && millis() < 5000) {
       // Wait for serial to connect
     }
-    Serial.println("\r\n\r\n***  INIT  ***");
+    Serial.println(F("\r\n\r\n***  INIT  ***"));
   #endif
 
   // Initialize WWVB reciever
@@ -404,11 +404,11 @@ void setup() {
     Serial.print(deviceID, HEX);
     Serial.print(";\t");
     if (deviceID == 0x10) {
-      Serial.println("Success: Device ID match");
+      Serial.println(F("Success: Device ID match"));
     } else {
-      Serial.println("Error: Device ID mismatch");
+      Serial.println(F("Error: Device ID mismatch"));
     }
-    Serial.println("Finished setup");
+    Serial.println(F("Finished setup"));
     
     lastInterruptCount = 0;
     interruptCount = 0;
@@ -420,9 +420,9 @@ void setup() {
 
     #ifdef DEBUG
       if (rtcDetected) {
-        Serial.println("RTC Detected");
+        Serial.println(F("RTC Detected"));
       } else {
-        Serial.println("RTC not present");
+        Serial.println(F("RTC not present"));
       }
     #endif
 
@@ -438,7 +438,7 @@ void setup() {
   #endif
 
   #ifndef USE_RTC
-    Serial.println("RTC support disabled");
+    Serial.println(F("RTC support disabled"));
   #endif
 
   // Start with time set to Y2k
@@ -474,12 +474,12 @@ void loop() {
     timeoutCounter = 0;
     while (es100.startRx(ANT_1, true) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
-        Serial.println("StartRx did not return EXIT_SUCCESS.  Retry in 5s...");
+        Serial.println(F("StartRx did not return EXIT_SUCCESS.  Retry in 5s..."));
       #endif
       delay(5000);
       timeoutCounter++;
     }
-    Serial.println("StartRx Antenna 1 only: EXIT_SUCCESS");
+    Serial.println(F("StartRx Antenna 1 only: EXIT_SUCCESS"));
     
     lastSyncAttempt = now();
     syncWatchdog = millis();
@@ -506,7 +506,7 @@ void loop() {
     lastReadStatus0 = es100.getStatus0();
 
     #ifdef DEBUG
-      Serial.print("Reading IRQ and Status0 registers. Received: ");
+      Serial.print(F("Reading IRQ and Status0 registers. Received: "));
     #endif
 
     lastSyncAttempt = now();
@@ -579,27 +579,27 @@ void loop() {
         timeoutCounter = 0;
         while (false && es100.stopRx() != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
           #ifdef DEBUG
-            Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
+            Serial.println(F("StopRx did not return EXIT_SUCCESS.  Retry in 5s..."));
           #endif
           delay(5000);
           timeoutCounter++;
         }
         #ifdef DEBUG
-          Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
+          Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
         #endif
         es100.disable();
       #endif
 
       #ifdef DEBUG
-        Serial.print("status0.rxOk = 0b");
+        Serial.print(F("status0.rxOk = 0b"));
         Serial.println(lastReadStatus0.rxOk, BIN);
-        Serial.print("status0.antenna = 0b");
+        Serial.print(F("status0.antenna = 0b"));
         Serial.println(lastReadStatus0.antenna, BIN);
-        Serial.print("status0.dstState = 0b");
+        Serial.print(F("status0.dstState = 0b"));
         Serial.println(lastReadStatus0.dstState, BIN);
-        Serial.print("status0.tracking = 0b");
+        Serial.print(F("status0.tracking = 0b"));
         Serial.println(lastReadStatus0.tracking, BIN);
-        Serial.print("Drift: ");
+        Serial.print(F("Drift: "));
         Serial.println(drift);
       #endif
 
@@ -640,13 +640,13 @@ void loop() {
     timeoutCounter = 0;
     while (false && es100.stopRx() != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
-        Serial.println("StopRx did not return EXIT_SUCCESS.  Retry in 5s...");
+        Serial.println(F("StopRx did not return EXIT_SUCCESS.  Retry in 5s..."));
       #endif
       delay(5000);
       timeoutCounter++;
     }
     #ifdef DEBUG
-      Serial.println("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx");
+      Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
     #endif
     es100.disable();
     delay(1500);
