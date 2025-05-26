@@ -124,7 +124,7 @@ class ES100
 			@param  singleAntenna  True disables the other antenna
 			@return EXIT_SUCCESS or EXIT_FAILURE
 		*/
-		uint8_t    		  startRx(es100Antenna startAntenna = ANT_1, bool singleAntenna = false);
+		static uint8_t    		  startRx(es100Antenna startAntenna = ANT_1, bool singleAntenna = false);
 
 		/*!
 			@brief  Start a Tracking Reception
@@ -132,76 +132,76 @@ class ES100
 			@param  singleAntenna  True disables the other antenna
 			@return EXIT_SUCCESS or EXIT_FAILURE
 		*/
-		uint8_t    		  startRxTracking(es100Antenna startAntenna = ANT_1);
+		static uint8_t    		  startRxTracking(es100Antenna startAntenna = ANT_1);
 		
 		/*!
 			@brief  Write stop bit and end reception
 			@return EXIT_SUCCESS or EXIT_FAILURE
 		*/   
-		uint8_t	    	  stopRx();
+		static uint8_t	    	  stopRx();
 
 		/*!
 			@brief  read Status0 and combined UTC date registers from receiver
 			@return ES100Data struct
 		*/ 
-		ES100Data       getData();
+		static ES100Data       getData();
 
 		/*!
 			@brief  read Control0 register from receiver
 			@return ES100Control0 struct
 		*/ 
-		ES100Control0   getControl0();
+		static ES100Control0   getControl0();
 
 		/*!
 			@brief  read IRQ Status register from receiver
 			@return ES100IRQstatus struct
 		*/ 
-		ES100IRQstatus  getIRQStatus();
+		static ES100IRQstatus  getIRQStatus();
 
 		/*!
 			@brief  read Status0 register from receiver
 			@return ES100Status0 struct
 		*/ 
-		ES100Status0 	  getStatus0();
+		static ES100Status0 	  getStatus0();
 
 		/*!
 			@brief  read year, month, day, hour, minute, second registers from receiver
 					convert received data from BCD to decimal
 			@return ES100DateTime struct
 		*/ 
-		ES100DateTime   getUTCdateTime();
+		static ES100DateTime   getUTCdateTime();
 
 		/*!
 			@brief  read Next DST egisters from receiver and convert from BCD to decimal
 			@return ES100NextDst struct
 		*/ 
-		ES100NextDst 	  getNextDst();
+		static ES100NextDst 	  getNextDst();
 
 		/*!
 			@brief  read Device ID register from receiver
 			@return hexadecimal device ID
 		*/ 
-		uint8_t		  	  getDeviceID();
+		static uint8_t		  	  getDeviceID();
 
 	private:
-    const uint32_t CLOCK_FREQ    = 100000;		// Hz
-    const uint32_t DEFAULT_CLOCK = 400000;		// Hz
+    static const uint32_t CLOCK_FREQ    = 100000;		// Hz
+    static const uint32_t DEFAULT_CLOCK = 400000;		// Hz
 
-    const uint8_t  ES100_ADDR               =	0x32;		// ES100 i2c Address
-    const uint8_t  ES100_CONTROL0_REG       =	0x00;
-    const uint8_t  ES100_CONTROL1_REG       = 0x01;
-    const uint8_t  ES100_IRQ_STATUS_REG     = 0x02;
-    const uint8_t  ES100_STATUS0_REG        = 0x03;
-    const uint8_t  ES100_YEAR_REG           = 0x04;
-    const uint8_t  ES100_MONTH_REG          = 0x05;
-    const uint8_t  ES100_DAY_REG            = 0x06;
-    const uint8_t  ES100_HOUR_REG	          =	0x07;
-    const uint8_t  ES100_MINUTE_REG	        = 0x08;
-    const uint8_t  ES100_SECOND_REG	        = 0x09;
-    const uint8_t  ES100_NEXT_DST_MONTH_REG =	0x0A;
-    const uint8_t  ES100_NEXT_DST_DAY_REG 	= 0x0B;
-    const uint8_t  ES100_NEXT_DST_HOUR_REG  = 0x0C;
-    const uint8_t  ES100_DEVICE_ID_REG      = 0x0D;
+    static const uint8_t ES100_ADDR               = 0x32;		// ES100 i2c Address
+    static const uint8_t ES100_CONTROL0_REG       = 0x00;
+    static const uint8_t ES100_CONTROL1_REG       = 0x01;
+    static const uint8_t ES100_IRQ_STATUS_REG     = 0x02;
+    static const uint8_t ES100_STATUS0_REG        = 0x03;
+    static const uint8_t ES100_YEAR_REG           = 0x04;
+    static const uint8_t ES100_MONTH_REG          = 0x05;
+    static const uint8_t ES100_DAY_REG            = 0x06;
+    static const uint8_t ES100_HOUR_REG	          = 0x07;
+    static const uint8_t ES100_MINUTE_REG	        = 0x08;
+    static const uint8_t ES100_SECOND_REG	        = 0x09;
+    static const uint8_t ES100_NEXT_DST_MONTH_REG = 0x0A;
+    static const uint8_t ES100_NEXT_DST_DAY_REG 	= 0x0B;
+    static const uint8_t ES100_NEXT_DST_HOUR_REG  = 0x0C;
+    static const uint8_t ES100_DEVICE_ID_REG      = 0x0D;
 		
     uint8_t			_int_pin;
 		uint8_t			_en_pin;
@@ -211,21 +211,21 @@ class ES100
 			@param  value
 			@return decimal data
 		*/ 
-		uint8_t 	bcdToDec(uint8_t value);
+		static uint8_t 	bcdToDec(uint8_t value);
 
 		/*!
 			@brief  Write data to receiver register
 			@param  addr Register address
 			@param  data Data to write
 		*/ 
-		void	  	_writeRegister(uint8_t addr, uint8_t data);
+		static void	  	_writeRegister(uint8_t addr, uint8_t data);
 
 		/*!
 			@brief  Read data to receiver register
 			@param  addr Register address
 			@return Data from register
 		*/ 
-		uint8_t		_readRegister(uint8_t addr);
+		static uint8_t		_readRegister(uint8_t addr);
 
 		/*!
 			@brief  Write data over I2C
@@ -233,7 +233,7 @@ class ES100
 			@param  numBytes Number of bytes to write
 			@param  *ptr pointer to data to write
 		*/ 
-		void	  	_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
+		static void	  	_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
 
 		/*!
 			@brief  Read data over I2C
@@ -241,7 +241,7 @@ class ES100
 			@param  numBytes Number of bytes to read
 			@param  *ptr pointer to read data into
 		*/ 
-		void	  	_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
+		static void	  	_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr);
 
 };
 #endif
