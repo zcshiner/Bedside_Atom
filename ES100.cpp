@@ -125,9 +125,9 @@ uint8_t ES100::startRx(es100Antenna startAntenna, bool singleAntenna)
       Serial.print("2");
     }
     if(singleAntenna) {
-      Serial.println(" only");
+      Serial.println(F(" only"));
     }
-    Serial.print("\t Wrote to ES100: ");
+    Serial.print(F("\t Wrote to ES100: "));
     Serial.println(_dataToWrite, HEX);
   #endif
   
@@ -146,9 +146,9 @@ uint8_t ES100::startRxTracking(es100Antenna startAntenna)
   #ifdef DEBUG
     Serial.println(F("ES100::startRx Tracking on, Antenna "));
     if (!startAntenna) {
-      Serial.println("1 only");
+      Serial.println(F("1 only"));
     } else{
-      Serial.println("2 only");
+      Serial.println(F("2 only"));
     }
   #endif
 
@@ -175,7 +175,7 @@ uint8_t ES100::startRxTracking(es100Antenna startAntenna)
 uint8_t ES100::stopRx()
 {
 	#ifdef DEBUG
-		Serial.println("ES100::stopRx");
+		Serial.println(F("ES100::stopRx"));
 	#endif
 
   const uint8_t _dataToWrite = 0x00;
@@ -308,7 +308,7 @@ void ES100::_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 	int i;
 
 	#ifdef DEBUG_I2C
-		Serial.print("i2c write addr: 0x");
+		Serial.print(F("i2c write addr: 0x"));
 		Serial.println(addr, HEX);
 	#endif
 
@@ -324,9 +324,9 @@ void ES100::_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 
 		#ifdef DEBUG_I2C
 			uint8_t d = ptr[i];
-			Serial.print("i2c Write ptr[");
+			Serial.print(F("i2c Write ptr["));
 			Serial.print(i);
-			Serial.print("] : 0x");
+			Serial.print(F("] : 0x"));
 			Serial.println(d, HEX);
 		#endif
 	}
@@ -340,7 +340,7 @@ void ES100::_I2Cwrite(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 void ES100::_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 {
 	#ifdef DEBUG_I2C
-		Serial.print("i2c read addr: 0x");
+		Serial.print(F("i2c read addr: 0x"));
 		Serial.println(addr, HEX);
 	#endif
 	
@@ -358,7 +358,7 @@ void ES100::_I2Cread(uint8_t addr, uint8_t numBytes, uint8_t *ptr)
 		ptr[i] = Wire.read();
 
 		#ifdef DEBUG_I2C
-			Serial.print("i2c read data: 0x");
+			Serial.print(F("i2c read data: 0x"));
 			Serial.println(ptr[i], HEX);
 		#endif
 	}
@@ -376,9 +376,9 @@ void ES100::_writeRegister(uint8_t addr, uint8_t data)
 	writeArray[1] = data;
 
 	#ifdef DEBUG_I2C
-		Serial.print("writeRegister addr : 0x");
+		Serial.print(F("writeRegister addr : 0x"));
 		Serial.println(addr, HEX);
-		Serial.print("writeRegister data : 0x");
+		Serial.print(F("writeRegister data : 0x"));
 		Serial.println(data, HEX);
 	#endif
 
@@ -393,9 +393,9 @@ uint8_t ES100::_readRegister(uint8_t addr)
 	_I2Cread(ES100_ADDR, 0x1, &data);
 
 	#ifdef DEBUG_I2C
-		Serial.print("readRegister addr : 0x");
+		Serial.print(F("readRegister addr : 0x"));
 		Serial.println(addr, HEX);
-		Serial.print("readRegister data : 0x");
+		Serial.print(F("readRegister data : 0x"));
 		Serial.println(data, HEX);
 	#endif
 

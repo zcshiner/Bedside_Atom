@@ -126,7 +126,7 @@ void atomic() {
 }
 
 void printES100DateTime(ES100DateTime dt) {
-  Serial.print("Received UTC time = 20");
+  Serial.print(F("Received UTC time = 20"));
   Serial.print(dt.year);
   Serial.print(":");
   Serial.print(dt.month);
@@ -153,7 +153,7 @@ inline uint8_t decodeTZswitch() {
       time_t _now = RTC.now().unixtime();
 
       #ifdef DEBUG
-        Serial.print("Current RTC time is: ");
+        Serial.print(F("Current RTC time is: "));
         Serial.println(_now);
       #endif
 
@@ -161,7 +161,7 @@ inline uint8_t decodeTZswitch() {
     }
     else {
       #ifdef DEBUG
-        Serial.println("RTC not yet set.");
+        Serial.println(F("RTC not yet set."));
       #endif
 
       return 0;
@@ -176,9 +176,9 @@ void adjustSystemTime (time_t _adjust) {
   time_t _new = now() + _adjust;
   
   #ifdef DEBUG
-    Serial.print("Time adjustment: ");
+    Serial.print(F("Time adjustment: "));
     Serial.println(_adjust);
-    Serial.println("Adjusting Time Library to: ");
+    Serial.println(F("Adjusting Time Library to: "));
     Serial.println(_new);
   #endif
 
@@ -188,7 +188,7 @@ void adjustSystemTime (time_t _adjust) {
   #ifdef USE_RTC
     if (rtcDetected) {
       #ifdef DEBUG 
-        Serial.println("Adjusting RTC to: ");
+        Serial.println(F("Adjusting RTC to: "));
         Serial.println(_new);
       #endif
 
@@ -223,7 +223,7 @@ int32_t updateTime(ES100DateTime dt) {
   #ifdef USE_RTC
     if (rtcDetected) {
       #ifdef DEBUG
-        Serial.print("Set RTC to: ");
+        Serial.print(F("Set RTC to: "));
         Serial.println(_now);
       #endif
 
@@ -237,7 +237,7 @@ int32_t updateTime(ES100DateTime dt) {
 
 void calculateUTCoffset(){
   #ifdef DEBUG
-    Serial.println("Calculating UTC offset");
+    Serial.println(F("Calculating UTC offset"));
   #endif
 
   timezone = -5 - decodeTZswitch();
@@ -519,11 +519,11 @@ void loop() {
       validES100Data.Status0 = lastReadStatus0;
 
 	    #ifdef DEBUG
-        Serial.println("Successful Reception");
-        Serial.print("Atomic millis = ");
+        Serial.println(F("Successful Reception"));
+        Serial.print(F("Atomic millis = "));
         Serial.println(atomicMillis);
 
-        Serial.print("Time Library: ");
+        Serial.print(F("Time Library: "));
         Serial.print(year());
         Serial.print(":");
         Serial.print(month());
@@ -622,12 +622,12 @@ void loop() {
     }
     else if (!lastReadIRQStatus.rxComplete && lastReadIRQStatus.cycleComplete){ // IRQStatus = 0x04
       #ifdef DEBUG
-        Serial.println("Unsuccessful Reception");
+        Serial.println(F("Unsuccessful Reception"));
       #endif
     }
     else {
       #ifdef DEBUG
-        Serial.println("Bad Data");
+        Serial.println(F("Bad Data"));
       #endif
     }
 
@@ -671,7 +671,7 @@ void loop() {
       if(lastGoodSyncTime == 0){
         triggerTimeSync = true;
         #ifdef DEBUG
-          Serial.println("Time not set, requesting sync");
+          Serial.println(F("Time not set, requesting sync"));
         #endif
       }
 
@@ -682,13 +682,13 @@ void loop() {
       {
         triggerTimeSync = true;
         #ifdef DEBUG
-          Serial.println("New hour, requesting sync");
+          Serial.println(F("New hour, requesting sync"));
         #endif
       }
       else {
         // do nothing
         #ifdef DEBUG
-          Serial.println("Sync not required");
+          Serial.println(F("Sync not required"));
         #endif
       }
     }
@@ -699,7 +699,7 @@ void loop() {
     else {
       // Already recieving the time, do nothing
       #ifdef DEBUG
-        Serial.println("Time sync in progress...");
+        Serial.println(F("Time sync in progress..."));
       #endif
     }
 
@@ -759,7 +759,7 @@ void loop() {
     // Advance hour with a single button press less than the hold threshold
     if (hourButton.released() && hourButton.previousDuration() < (holdThreshold / 2)){
       #ifdef DEBUG
-        Serial.println("HOUR Pressed\t");
+        Serial.println(F("HOUR Pressed\t"));
       #endif
 
       #ifndef DISABLE_PIEZO
@@ -773,7 +773,7 @@ void loop() {
     // Advance minute with a single button press less than the hold threshold
     if (minuteButton.released() && minuteButton.previousDuration() < (holdThreshold / 2)){
       #ifdef DEBUG
-        Serial.println("MINUTE Pressed\t");
+        Serial.println(F("MINUTE Pressed\t"));
       #endif
 
       #ifndef DISABLE_PIEZO
@@ -793,7 +793,7 @@ void loop() {
     // Advance minute with a button held longer than than the hold threshold
     if (minuteButton.isPressed() && !hourButton.isPressed() && minuteButton.currentDuration() > holdThreshold + (125 * heldLoops) && hourButton.currentDuration() > holdThreshold) {
       #ifdef DEBUG
-        Serial.println("MINUTE Held\t");
+        Serial.println(F("MINUTE Held\t"));
       #endif
 
       #ifndef DISABLE_PIEZO
@@ -816,7 +816,7 @@ void loop() {
     // Advance hour with a button held longer than than the hold threshold
     if (hourButton.isPressed() && !minuteButton.isPressed() && hourButton.currentDuration() > holdThreshold + (200 * heldLoops) && minuteButton.currentDuration() > holdThreshold) {
       #ifdef DEBUG
-        Serial.println("HOUR Held\t");
+        Serial.println(F("HOUR Held\t"));
       #endif
 
       #ifndef DISABLE_PIEZO
@@ -853,7 +853,7 @@ void loop() {
       if (lastGoodSyncTime == 0) {
         matrix.println("----"); 
         #ifdef DEBUG
-            Serial.println("Not yet synced...");
+            Serial.println(F("Not yet synced..."));
         #endif
       } else {
 
@@ -911,7 +911,7 @@ void loop() {
     #endif
 
     #ifdef DEBUG
-        Serial.println("24HR Pressed\t");
+        Serial.println(F("24HR Pressed\t"));
     #endif
 
     EEPROM.update(eepromAddress_useTwentyFourHourTime, useTwentyFourHourTime);
@@ -1036,7 +1036,7 @@ void loop() {
 
     #ifdef DEBUG
       currentTZswitch = decodeTZswitch();
-      Serial.print("TZ Switch Changed! Now: ");
+      Serial.print(F("TZ Switch Changed! Now: "));
       Serial.println(currentTZswitch);
     #endif
 
@@ -1066,7 +1066,7 @@ void loop() {
   // Force a recalculate of UTC offset if DST switch changes
   if (DSTswitch.changed()) {
     #ifdef DEBUG
-      Serial.println("DST Switch Changed!");
+      Serial.println(F("DST Switch Changed!"));
     #endif
 
     if(lastGoodSyncTime != 0) {
