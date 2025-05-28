@@ -22,6 +22,12 @@ enum leapSecond_codes{
   negativeLeapSecond = 0b11
 };
 
+/** @brief ES100 Antenna Selection */
+enum es100Antenna : bool {
+  ANT_1,
+  ANT_2
+};
+
 /** @brief Control0 register data */
 struct ES100Control0
 {
@@ -46,10 +52,10 @@ struct ES100IRQstatus
 struct ES100Status0
 {
 	// Data in the struct is only valid when rxOk = 1.
-	bool    rxOk;       /**<  0 (0b0)  Indicates that a successful reception has not occured.
-                            1 (0b1)  Indicated that a successful reception has occured. */
-	bool	  antenna;    /**<  0 (0b0)  Indicates that the reception occured on Antenna 1.
-                            1 (0b1)  Indicates that the reception occured on Antenna 2. */
+	bool    rxOk;       	/**<  0 (0b0)  Indicates that a successful reception has not occured.
+                            	1 (0b1)  Indicated that a successful reception has occured. */
+	es100Antenna antenna;	/**<  0 (0b0)  Indicates that the reception occured on Antenna 1.
+                            	1 (0b1)  Indicates that the reception occured on Antenna 2. */
 	leapSecond_codes	leapSecond; /**< noLeapSecond: 0 (0b00) Indicates that the current month WILL NOT have a leap second.
                                 noLeapSecond:       1 (0b01) Also indicates that the current month WILL NOT have a leap second.
                                 positiveLeapSecond: 2 (0b10) Indicates that the current month WILL have a negative leap second.
@@ -86,12 +92,6 @@ struct ES100Data
 {
   ES100Status0 Status0;       /**< struct ES100Status0 */
   ES100DateTime DateTimeUTC;  /**< struct ES100DateTime */
-};
-
-/** @brief ES100 Antenna Selection */
-enum es100Antenna : bool {
-  ANT_1,
-  ANT_2
 };
 
 

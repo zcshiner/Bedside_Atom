@@ -28,6 +28,7 @@
 //#define DISABLE_PIEZO ///< Disable piezo buzzer alerts on system events
 #define DISABLE_SYNC_PIEZO ///< Disable piezo buzzer when a good sync happens (annoying)
 #define USE_RTC ///< Is an RTC onboard and do we want to use it?
+#define DUAL_ANTENNA_SUPPORT /// Enable support for second antenna
 
 // Initialize library objects
 ES100 es100;
@@ -56,6 +57,7 @@ const unsigned long baudrate = 115200;
 const uint16_t alertTone_kHz = 4600; // small buzzer
 // const uint16_t alertTone_kHz = 3900; // big buzzer
 const unsigned int eepromAddress_useTwentyFourHourTime = 32; // arbitrary
+const unsigned int eepromAddress_lastAntenna = 36;
 
 // Variables for manipulating a time syncronization
 volatile unsigned long atomicMillis = 0;
@@ -90,6 +92,8 @@ const int32_t driftThreshold = 59;
 // Flags to control reception
 bool timeSyncInProgress = false;  // variable to determine if we are in receiving mode
 bool triggerTimeSync = false;     // variable to trigger the reception
+bool singleAntennaMode = false;    // use single or dual antenna mode
+es100Antenna lastAntenna = ANT_1; // store which antenna was used last / which to start with
 
 // ES100 Data Structures
 ES100IRQstatus lastReadIRQStatus = {}; // read every interrupt
@@ -121,7 +125,7 @@ void atomic() {
   atomicMillis = millis();
   interruptCount++;
   #ifdef DEBUG
-    Serial.println("** INTERRUPT CALLED ** ");
+    Serial.println("** INT ** ");
   #endif
 }
 
@@ -385,6 +389,7 @@ void setup() {
 
   pinMode(clockSwitchPin_TZ0, INPUT_PULLUP);
   pinMode(clockSwitchPin_TZ1, INPUT_PULLUP);
+  pinMode(clockButtonPin_ANT_SEL, INPUT_PULLUP);
 
   hourButton.interval(debounceInterval);
   minuteButton.interval(debounceInterval);
@@ -445,8 +450,12 @@ void setup() {
   adjustTime(SECS_YR_2000);
   setSyncInterval(300); // seconds
 
-  // EEPROM state is unknown at startup.  Validate existing data before moving on.
+  // EEPROM state is unknown at startup.  Validate 24hr time data before moving on.
   uint8_t unknownEEPROMdata = EEPROM.read(eepromAddress_useTwentyFourHourTime);
+  #ifdef DEBUG
+    Serial.print(F("EEPROM stored 24hour: "));
+    Serial.println(unknownEEPROMdata);
+  #endif
 
   if (unknownEEPROMdata == 1) {
     useTwentyFourHourTime = true;
@@ -456,7 +465,42 @@ void setup() {
   }
   else {
     EEPROM.write(eepromAddress_useTwentyFourHourTime, useTwentyFourHourTime);
+    #ifdef DEBUG
+        Serial.println(F("Wrote 24hr time false to EEPROM."));
+    #endif
   }
+
+  // repeat for antenna data
+  #ifdef DUAL_ANTENNA_SUPPORT
+    unknownEEPROMdata = EEPROM.read(eepromAddress_lastAntenna);
+    #ifdef DEBUG
+      Serial.print(F("EEPROM stored antenna: "));
+      Serial.println(unknownEEPROMdata);
+    #endif
+
+    if (unknownEEPROMdata == ANT_1) {
+      lastAntenna = ANT_1;
+    }
+    else if (unknownEEPROMdata == ANT_2) {
+      lastAntenna = ANT_2;
+    }
+    else {
+      EEPROM.write(eepromAddress_lastAntenna, ANT_1);
+      #ifdef DEBUG
+          Serial.println(F("Wrote ANT_1 to EEPROM."));
+      #endif
+    }
+
+    singleAntennaMode = !digitalRead(clockButtonPin_ANT_SEL);
+    #ifdef DEBUG
+        Serial.print(F("Dual antennas supported. Jumper set to: "));
+        if (singleAntennaMode) {
+          Serial.println(F("Single"));
+        } else {
+          Serial.println(F("Dual"));
+        }
+    #endif
+  #endif
 
   lastTZswitch = decodeTZswitch();
 
@@ -472,14 +516,33 @@ void loop() {
     es100.enable();
 
     timeoutCounter = 0;
-    while (es100.startRx(ANT_1, true) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
+    while (es100.startRx(lastAntenna, singleAntennaMode) != EXIT_SUCCESS && timeoutCounter < timeoutLimit) {
       #ifdef DEBUG
         Serial.println(F("StartRx did not return EXIT_SUCCESS.  Retry in 5s..."));
       #endif
       delay(5000);
       timeoutCounter++;
     }
-    Serial.println(F("StartRx Antenna 1 only: EXIT_SUCCESS"));
+
+    #ifdef DEBUG
+      if (timeoutCounter <= timeoutLimit) {
+        Serial.print(F("StartRx: EXIT_SUCCESS; "));
+
+        if (singleAntennaMode) {
+          Serial.print(F("Single Antenna; "));
+        } else {
+          Serial.print(F("Dual Antenna; "));
+        }
+ 
+        if (lastAntenna == ANT_1) {
+          Serial.println(F("Start ANT_1"));
+        } else {
+          Serial.println(F("Start ANT_2"));
+        }
+      } else {
+        Serial.println(F("Critical failure.  StartRx failed"));
+      }
+    #endif
     
     lastSyncAttempt = now();
     syncWatchdog = millis();
@@ -585,7 +648,11 @@ void loop() {
           timeoutCounter++;
         }
         #ifdef DEBUG
-          Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
+          if (timeoutCounter <= timeoutLimit) {
+            Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
+          } else {
+            Serial.println(F("Critical failure.  StopRx failed"));
+          }
         #endif
         es100.disable();
       #endif
@@ -602,6 +669,9 @@ void loop() {
         Serial.print(F("Drift: "));
         Serial.println(drift);
       #endif
+
+      lastAntenna = lastReadStatus0.antenna;
+      EEPROM.update(eepromAddress_lastAntenna, lastAntenna);
 
       #ifndef DISABLE_DISPLAY
         #ifdef DISPLAY_SYNC_ON_DRIFT
@@ -646,7 +716,11 @@ void loop() {
       timeoutCounter++;
     }
     #ifdef DEBUG
-      Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
+      if (timeoutCounter <= timeoutLimit) {
+        Serial.println(F("StopRx: EXIT_SUCCESS; Disabling es100 after good Rx"));
+      } else {
+        Serial.println(F("Critical failure.  StopRx failed"));
+      }
     #endif
     es100.disable();
     delay(1500);

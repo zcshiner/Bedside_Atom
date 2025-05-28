@@ -241,12 +241,19 @@ ES100Status0 ES100::getStatus0()
 
 	ES100Status0 	data;
 	uint8_t _registerData = _readRegister(ES100_STATUS0_REG);
+	uint8_t _antennaBuffer;
 
 	data.rxOk       = (_registerData & 0b00000001);      // bit 0
-	data.antenna    = (_registerData & 0b00000010) >> 1; // bit 1
+	_antennaBuffer  = (_registerData & 0b00000010) >> 1; // bit 1
 	data.leapSecond	= (leapSecond_codes)( (_registerData & 0b00011000) >> 3 ); // bits 3 & 4
   data.dstState   = (dstState_codes)( (_registerData & 0b01100000) >> 5 ); // bits 5 & 6	
 	data.tracking   = (_registerData & 0b10000000) >> 7; // bit 7
+
+	if (_antennaBuffer == 1) {
+		data.antenna = ANT_2;
+	} else { // failover so anything other than 2 matches to 1
+		data.antenna = ANT_1;
+	}
 
 	return data;
 }
