@@ -425,7 +425,13 @@ void setup() {
 
     #ifdef DEBUG
       if (rtcDetected) {
-        Serial.println(F("RTC Detected"));
+        Serial.print(F("RTC Detected - "));
+
+        if (RTC.isrunning()) {
+          Serial.println(F("Already running"));
+        } else {
+          Serial.println(F("Not yet running"));
+        }
       } else {
         Serial.println(F("RTC not present"));
       }
@@ -466,7 +472,7 @@ void setup() {
   else {
     EEPROM.write(eepromAddress_useTwentyFourHourTime, useTwentyFourHourTime);
     #ifdef DEBUG
-        Serial.println(F("Wrote 24hr time false to EEPROM."));
+        Serial.println(F("Wrote 24hr time false to EEPROM"));
     #endif
   }
 
@@ -973,7 +979,7 @@ void loop() {
   }
 
   // Toggle 24hr mode if button is pressed
-  if (button_24hour.pressed()) {
+  if (button_24hour.released()) {
     useTwentyFourHourTime = !useTwentyFourHourTime;
 
     #ifndef DISABLE_PIEZO
