@@ -17,6 +17,7 @@
 #include <Bounce2.h>              // https://github.com/thomasfredericks/Bounce2
 #include <toneAC.h>               // https://bitbucket.org/teckel12/arduino-toneac/wiki/Home
 #include "RTClib.h"               // https://github.com/adafruit/RTClib
+#include "git-version.h"          // https://arduino.stackexchange.com/a/51488
 
 // Compile debug/options
 #define DEBUG ///< Print core functionality debug info
@@ -374,6 +375,7 @@ void setup() {
       // Wait for serial to connect
     }
     Serial.println(F("\r\n\r\n***  INIT  ***"));
+    Serial.println("Version " GIT_VERSION);
   #endif
 
   // Initialize WWVB reciever
